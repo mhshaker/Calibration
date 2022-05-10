@@ -21,7 +21,7 @@ def calib_ens_total_uncertainty(model, x_test):
     total_uncertainty = entropy(probs, base=2,axis=1)
     return total_uncertainty
 
-def calib_ens_member_uncertainty(model, x_test, x_train, y_train, X_calib, y_calib, unc_method="bays", laplace_smoothing=0, log=False):
+def calib_ens_member_uncertainty(model, x_test, x_train, y_train, X_calib, y_calib, unc_method="bays", laplace_smoothing=1, log=False):
     
     if "bays" == unc_method:
         likelyhoods = get_likelyhood(model, x_train, y_train, laplace_smoothing)
@@ -71,7 +71,7 @@ def get_prob(model_ens, x_data, laplace_smoothing, a=0, b=0, log=False):
 def get_member_calib_prob(model_ens, x_data, X_calib, y_calib):
     prob_matrix  = []
     for estimator in model_ens.estimators_:
-        model_calib = CalibratedClassifierCV(estimator, cv=20, method="isotonic")
+        model_calib = CalibratedClassifierCV(estimator, cv=5, method="isotonic")
         model_calib.fit(X_calib, y_calib)
         tree_prob = model_calib.predict_proba(x_data)
         prob_matrix.append(tree_prob)
