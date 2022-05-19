@@ -69,9 +69,8 @@ def load_data(data_name):
 
 	return features, target
 
-def load_ood(data_name, split=0.3):
+def load_ood(data_name, split=0.3, calibration_set=True, seed=1):
 	features, target = load_data(data_name)
-	seed = 1
 	np.random.seed(seed)
 	classes = np.unique(target)
 	selected_id = np.random.choice(classes,int(len(classes)/2),replace=False) # select id classes
@@ -86,10 +85,19 @@ def load_ood(data_name, split=0.3):
 	x_train, x_test_id, y_train, y_test_id  = split_data(features_id, target_id,   split=split, seed=seed)
 	_      , x_test_ood, _     , y_test_ood = split_data(features_ood, target_ood, split=split, seed=seed)
 
-	y_test_idoodmix = np.concatenate((np.zeros(y_test_id.shape), np.ones(y_test_ood.shape)), axis=0)
-	x_test_idoodmix = np.concatenate((x_test_id, x_test_ood), axis=0)
+	if calibration_set:
+		x_test_id, x_calib, y_test_id, y_calib = train_test_split(x_test_id, y_test_id, test_size=0.5, shuffle=True, random_state=1)
+	else:
+		x_calib, y_calib = 0, 0
 
-	return x_train, y_train, x_test_id, y_test_id, x_test_ood, y_test_ood, x_test_idoodmix, y_test_idoodmix
+	minlen = len(x_test_id)
+	if len(x_test_ood) < minlen:
+		minlen = len(x_test_ood)
+
+	y_test_idoodmix = np.concatenate((np.zeros(minlen), np.ones(minlen)), axis=0)
+	x_test_idoodmix = np.concatenate((x_test_id[:minlen], x_test_ood[:minlen]), axis=0)
+
+	return x_train, y_train, x_test_id, y_test_id, x_test_ood, y_test_ood, x_test_idoodmix, y_test_idoodmix, x_calib, y_calib
 
 def split_data(features, target, split, seed=1):
    x_train, x_test, y_train, y_test = train_test_split(features,target,test_size=split, shuffle=True, random_state=seed, stratify=target)
