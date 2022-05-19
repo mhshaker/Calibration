@@ -69,6 +69,27 @@ def load_data(data_name):
 
 	return features, target
 
+def load_ood(data_name, split=0.3):
+	features, target = load_data(data_name)
+	seed = 1
+	np.random.seed(seed)
+	classes = np.unique(target)
+	selected_id = np.random.choice(classes,int(len(classes)/2),replace=False) # select id classes
+	selected_id_index = np.argwhere(np.isin(target,selected_id)) # get index of all id instances
+	selected_ood_index = np.argwhere(np.isin(target,selected_id,invert=True)) # get index of all not selected classes (OOD)
+
+	target_id    = target[selected_id_index].reshape(-1)
+	features_id  = features[selected_id_index].reshape(-1, features.shape[1])
+	target_ood   = target[selected_ood_index].reshape(-1)
+	features_ood = features[selected_ood_index].reshape(-1, features.shape[1])    
+
+	x_train, x_test_id, y_train, y_test_id  = split_data(features_id, target_id,   split=split, seed=seed)
+	_      , x_test_ood, _     , y_test_ood = split_data(features_ood, target_ood, split=split, seed=seed)
+
+	y_test_idoodmix = np.concatenate((np.zeros(y_test_id.shape), np.ones(y_test_ood.shape)), axis=0)
+	x_test_idoodmix = np.concatenate((x_test_id, x_test_ood), axis=0)
+
+	return x_train, y_train, x_test_id, y_test_id, x_test_ood, y_test_ood, x_test_idoodmix, y_test_idoodmix
 
 def split_data(features, target, split, seed=1):
    x_train, x_test, y_train, y_test = train_test_split(features,target,test_size=split, shuffle=True, random_state=seed, stratify=target)
