@@ -3,6 +3,7 @@ import UncertaintyM as unc
 from sklearn.metrics import log_loss
 from scipy.stats import entropy
 from sklearn.calibration import CalibratedClassifierCV, CalibrationDisplay
+from sklearn.linear_model import LogisticRegression
 
 def model_uncertainty(model, x_test, x_train, y_train, unc_method="bays", laplace_smoothing=1, log=False):
     
@@ -15,9 +16,7 @@ def model_uncertainty(model, x_test, x_train, y_train, unc_method="bays", laplac
 
     return total_uncertainty, epistemic_uncertainty, aleatoric_uncertainty
 
-def calib_ens_total_uncertainty(model, x_test):
-    
-    probs = model.predict_proba(x_test)
+def calib_ens_total_uncertainty(probs):
     total_uncertainty = entropy(probs, base=2,axis=1)
     return total_uncertainty
 
@@ -70,11 +69,16 @@ def get_prob(model_ens, x_data, laplace_smoothing, a=0, b=0, log=False):
 
 def get_member_calib_prob(model_ens, x_data, X_calib, y_calib, calib_method="isotonic"):
     prob_matrix  = []
+
     for estimator in model_ens.estimators_:
-        model_calib = CalibratedClassifierCV(estimator, cv=10, method=calib_method)
-        model_calib.fit(X_calib, y_calib)
-        tree_prob = model_calib.predict_proba(x_data)
-        prob_matrix.append(tree_prob)
+        # model_calib = CalibratedClassifierCV(estimator, cv=3, method=calib_method)
+        model_calib = LogisticRegression(C=99999999999)
+        tree_prob_x_calib = estimator.predict_proba(X_calib)
+        model_calib.fit(tree_prob_x_calib, y_calib)
+
+        tree_prob_x_test = estimator.predict_proba(x_data)
+        tree_prob_x_test_calib = model_calib.predict_proba(tree_prob_x_test)
+        prob_matrix.append(tree_prob_x_test_calib)
     prob_matrix = np.array(prob_matrix)
     prob_matrix = prob_matrix.transpose([1,0,2]) # D1 = data index D2= ens tree index D3= prediction prob for classes
     return prob_matrix

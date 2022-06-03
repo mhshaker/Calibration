@@ -5,6 +5,8 @@ from sklearn import metrics
 from scipy import stats
 from statistics import mean
 import warnings
+from sklearn.metrics import roc_auc_score
+
 random.seed(1)
 
 def uncertainty_ent_bays(probs, likelihoods): # three dimentianl array with d1 as datapoints, (d2) the rows as samples and (d3) the columns as probability for each class
@@ -385,3 +387,10 @@ def uncertainty_distribution(predictions_list, labels_list, uncertainty_list, lo
 		unc_incorrect_all = np.concatenate((unc_incorrect_all, unc_incorrect))
 	
 	return unc_correct_all, unc_incorrect_all
+
+def unc_auroc(predictions, labels, uncertainty):
+	predictions = np.array(predictions)
+	uncertainty = np.array(uncertainty)
+
+	correctness_map = np.where(predictions == labels, 0, 1)
+	return roc_auc_score(correctness_map, uncertainty)
