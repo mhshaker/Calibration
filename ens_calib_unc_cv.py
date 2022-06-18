@@ -12,9 +12,27 @@ from sklearn.model_selection import KFold
 from sklearn.utils import shuffle
 from sklearn.calibration import CalibratedClassifierCV, CalibrationDisplay
 from sklearn.metrics import roc_auc_score
+from sklearn.calibration import calibration_curve
+
+
+def expected_calibration_error(probs, predictions, y_true, bins=10):
+    prob_max = np.max(probs, axis=1) # find the most probabil class
+    correctness_map = np.where(predictions==y_true, 1, 0) # determine which predictions are correct
+
+    bin_size = 1/bins
+    ece = 0
+    for bin in range(bins):
+        bin_indexes = np.where((prob_max > bin * bin_size) & (prob_max <= (bin+1) * bin_size))[0]
+        if len(bin_indexes) > 0:
+            bin_conf = prob_max[bin_indexes].mean()
+            bin_acc = correctness_map[bin_indexes].sum() / len(bin_indexes)
+            dif = abs(bin_conf - bin_acc)
+            ece += dif
+    return ece 
 
 # load data
-features, target = dp.load_data("cifar10small") # cifar10small
+dataset = "cifar10small"  
+features, target = dp.load_data(dataset) # cifar10small
 
 tu_auroc = []
 eu_auroc = []
@@ -82,6 +100,17 @@ for seed in range(10):
         prob_x_test = model.predict_proba(x_test)
         prob_x_test_calib = lr.predict_proba(prob_x_test)
 
+        model_ece = expected_calibration_error(prob_x_test, model.predict(x_test), y_test, bins=10)
+        # print("------------------------------------")
+        modelcalib_ece = expected_calibration_error(prob_x_test_calib, lr.predict(prob_x_test), y_test, bins=10)
+        
+        # _,_, model_ece = calibration_curve(y_test, prob_x_test[:,0], n_bins=10)
+        # _,_, modelcalib_ece = calibration_curve(y_test, prob_x_test_calib[:,0], n_bins=10)
+        
+        
+        print(f"model_ece {model_ece}")
+        print(f"modelcalib_ece {modelcalib_ece}")
+        exit()
 
         prob_x_test_idoodmix = model.predict_proba(x_test_idoodmix)
         prob_x_test_calib_idoodmix = lr.predict_proba(prob_x_test_idoodmix)
@@ -134,6 +163,7 @@ eumc_auroc_avg = np.array(eumc_auroc).mean()
 aumc_auroc_avg = np.array(aumc_auroc).mean()
 tuc_auroc_avg = np.array(tuc_auroc).mean()
 
+print(f"dataset {dataset}")
 print("------------------------------------acc-rej")
 print("Ens")
 print(f"{tu_auroc_avg* 100:.2f} Total uncertainty") 
