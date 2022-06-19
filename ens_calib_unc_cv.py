@@ -89,7 +89,7 @@ for seed in range(10):
         # create ood test dataset with mix of id and ood
         x_ood,   y_ood  = features[np.intersect1d(test_ix, ood_index)],target[np.intersect1d(test_ix, ood_index)]
         minlen = len(x_test)
-        if len(x_test) < minlen:
+        if len(x_ood) < minlen:
             minlen = len(x_ood)
         y_test_idoodmix = np.concatenate((np.zeros(minlen), np.ones(minlen)), axis=0)
         x_test_idoodmix = np.concatenate((x_test[:minlen], x_ood[:minlen]), axis=0)
@@ -101,9 +101,9 @@ for seed in range(10):
         # print("Ens model test score = ", model.score(x_test, y_test))
         
         # train calibrated model
-        calib_method = "isotonic" # 
-        model_calib = CalibratedClassifierCV(model, cv=5, method=calib_method)
-        model_calib.fit(x_train, y_train)
+        # calib_method = "isotonic" # 
+        # model_calib = CalibratedClassifierCV(model, cv=5, method=calib_method)
+        # model_calib.fit(x_train, y_train)
 
         prob_x_calib = model.predict_proba(x_calib)
         lr = LogisticRegression(C=99999999999)
@@ -115,18 +115,10 @@ for seed in range(10):
         prob_x_test = model.predict_proba(x_test)
         prob_x_test_calib = lr.predict_proba(prob_x_test)
 
-        model_ece = expected_calibration_error(prob_x_test, model.predict(x_test), y_test, bins=10, equal_bin_size=True)
-        # print("------------------------------------")
-        modelcalib_ece = expected_calibration_error(prob_x_test_calib, lr.predict(prob_x_test), y_test, bins=10, equal_bin_size=True)
-        
-        # _,_, model_ece = calibration_curve(y_test, prob_x_test[:,0], n_bins=10)
-        # _,_, modelcalib_ece = calibration_curve(y_test, prob_x_test_calib[:,0], n_bins=10)
-        
-        
-        print(f"model_ece {model_ece}")
-        print(f"modelcalib_ece {modelcalib_ece}")
-        exit()
-
+        # check ECE value for normal and calib model
+        # model_ece = expected_calibration_error(prob_x_test, model.predict(x_test), y_test, bins=10, equal_bin_size=True)
+        # modelcalib_ece = expected_calibration_error(prob_x_test_calib, lr.predict(prob_x_test), y_test, bins=10, equal_bin_size=True)
+                
         prob_x_test_idoodmix = model.predict_proba(x_test_idoodmix)
         prob_x_test_calib_idoodmix = lr.predict_proba(prob_x_test_idoodmix)
 
@@ -138,7 +130,7 @@ for seed in range(10):
 
         # unc Q id
         tu, eu, au = unc.model_uncertainty(model, x_test, x_train, y_train)
-        tumc, eumc, aumc = unc.calib_ens_member_uncertainty(model, x_test, x_train, y_train, x_calib, y_calib, calib_method=calib_method)
+        tumc, eumc, aumc = unc.calib_ens_member_uncertainty(model, x_test, x_train, y_train, x_calib, y_calib)
         tuc = unc.calib_ens_total_uncertainty(prob_x_test_calib)
         # unc Q id OOD 
         tu_ood, eu_ood, au_ood = unc.model_uncertainty(model, x_test_idoodmix, x_train, y_train)
