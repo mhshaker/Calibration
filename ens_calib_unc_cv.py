@@ -15,19 +15,34 @@ from sklearn.metrics import roc_auc_score
 from sklearn.calibration import calibration_curve
 
 
-def expected_calibration_error(probs, predictions, y_true, bins=10):
+def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_size=True):
     prob_max = np.max(probs, axis=1) # find the most probabil class
     correctness_map = np.where(predictions==y_true, 1, 0) # determine which predictions are correct
-
-    bin_size = 1/bins
     ece = 0
-    for bin in range(bins):
-        bin_indexes = np.where((prob_max > bin * bin_size) & (prob_max <= (bin+1) * bin_size))[0]
-        if len(bin_indexes) > 0:
-            bin_conf = prob_max[bin_indexes].mean()
-            bin_acc = correctness_map[bin_indexes].sum() / len(bin_indexes)
+
+    if equal_bin_size == False:
+        bin_size = 1/bins
+        for bin in range(bins):
+            bin_indexes = np.where((prob_max > bin * bin_size) & (prob_max <= (bin+1) * bin_size))[0]
+            if len(bin_indexes) > 0:
+                bin_conf = prob_max[bin_indexes].mean()
+                bin_acc = correctness_map[bin_indexes].sum() / len(bin_indexes)
+                dif = abs(bin_conf - bin_acc)
+                ece += dif * len(bin_indexes)
+        ece = ece / len(predictions)
+    else: # equal_bin_size
+        sorted_index = np.argsort(prob_max, kind='stable') # sort probs
+        prob_max = prob_max[sorted_index]
+        correctness_map = correctness_map[sorted_index]
+
+        bin_size = int(len(predictions) / bins)
+        for bin in range(bins):
+            bin_conf = prob_max[bin*bin_size:(bin+1)*bin_size].mean()
+            bin_acc = correctness_map[bin*bin_size:(bin+1)*bin_size].sum() / bin_size
             dif = abs(bin_conf - bin_acc)
-            ece += dif
+            ece += dif 
+        ece = ece / bins
+
     return ece 
 
 # load data
@@ -100,9 +115,9 @@ for seed in range(10):
         prob_x_test = model.predict_proba(x_test)
         prob_x_test_calib = lr.predict_proba(prob_x_test)
 
-        model_ece = expected_calibration_error(prob_x_test, model.predict(x_test), y_test, bins=10)
+        model_ece = expected_calibration_error(prob_x_test, model.predict(x_test), y_test, bins=10, equal_bin_size=True)
         # print("------------------------------------")
-        modelcalib_ece = expected_calibration_error(prob_x_test_calib, lr.predict(prob_x_test), y_test, bins=10)
+        modelcalib_ece = expected_calibration_error(prob_x_test_calib, lr.predict(prob_x_test), y_test, bins=10, equal_bin_size=True)
         
         # _,_, model_ece = calibration_curve(y_test, prob_x_test[:,0], n_bins=10)
         # _,_, modelcalib_ece = calibration_curve(y_test, prob_x_test_calib[:,0], n_bins=10)
