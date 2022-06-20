@@ -13,6 +13,7 @@ from sklearn.utils import shuffle
 from sklearn.calibration import CalibratedClassifierCV, CalibrationDisplay
 from sklearn.metrics import roc_auc_score
 from sklearn.calibration import calibration_curve
+import ray
 
 
 def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_size=True):
@@ -45,8 +46,11 @@ def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_si
 
     return ece 
 
+
+dataset_list = ["MagicTelescope", "eeg-eye-state", "connect-4", "bank-marketing", "Amazon_employee_access", "adult"]
+
 # load data
-dataset = "cifar10small"  
+dataset = "MagicTelescope"  
 features, target = dp.load_data(dataset) # cifar10small
 
 tu_auroc = []

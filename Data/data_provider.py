@@ -8,6 +8,7 @@ import pandas as pd
 from sklearn import datasets
 from sklearn.utils import resample
 from sklearn import preprocessing
+from scipy.io import arff
 
 def load_data(data_name):   
 
@@ -146,3 +147,19 @@ def load_arff_data(name="adult", convert_to_int=True, type="binary", log=True):
 	# target_names = ["class1","class2"]
 
 	return features, df.target #features_names, target_names
+
+def load_arff_2(data_name):
+	data = arff.loadarff(f'./Data/{data_name}}.arff')
+	df = pd.DataFrame(data[0])
+	df.rename(columns={ df.columns[-1]: "target" }, inplace = True)
+	if data_name == "MagicTelescope":
+		df.drop("ID", axis=1, inplace=True)
+
+	features = df.drop("target", axis=1)
+	target = df.target
+
+	le = preprocessing.LabelEncoder()
+	le.fit(target)
+	target = le.transform(target)
+
+	return features, target
