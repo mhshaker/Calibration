@@ -149,7 +149,7 @@ def load_arff_data(name="adult", convert_to_int=True, type="binary", log=True):
 	return features, df.target #features_names, target_names
 
 def load_arff_2(data_name):
-	data = arff.loadarff(f'./Data/{data_name}}.arff')
+	data = arff.loadarff(f"./Data/{data_name}.arff")
 	df = pd.DataFrame(data[0])
 	df.rename(columns={ df.columns[-1]: "target" }, inplace = True)
 	if data_name == "MagicTelescope":
@@ -162,4 +162,4 @@ def load_arff_2(data_name):
 	le.fit(target)
 	target = le.transform(target)
 
-	return features, target
+	return np.array(features), np.array(target)
