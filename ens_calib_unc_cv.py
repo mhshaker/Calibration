@@ -47,11 +47,19 @@ def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_si
     return ece 
 
 
-dataset_list = ["MagicTelescope", "eeg-eye-state", "connect-4", "bank-marketing", "Amazon_employee_access", "adult"]
+#dataset_list = ["cifar10small", "connect-4", "bank-marketing", "Amazon_employee_access", "adult"] # "MagicTelescope", "eeg-eye-state", 
+dataset_list = ["amazon-commerce-reviews"]
 
 for dataset in dataset_list:
     # load data
-    features, target = dp.load_arff_2(dataset) # cifar10small
+
+    if dataset == "cifar10small":
+        features, target = dp.load_data(dataset)
+    else:
+        features, target = dp.load_arff_2(dataset)
+
+    # print(np.unique(target))
+    # exit()
 
     tu_auroc = []
     eu_auroc = []

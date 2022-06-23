@@ -162,4 +162,6 @@ def load_arff_2(data_name):
 	le.fit(target)
 	target = le.transform(target)
 
+	print(features.head())
+
 	return np.array(features), np.array(target)
