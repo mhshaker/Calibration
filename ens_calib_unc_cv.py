@@ -117,21 +117,27 @@ for dataset in dataset_list:
             # model_calib.fit(x_train, y_train)
 
             prob_x_calib = model.predict_proba(x_calib)
-            lr = LogisticRegression(C=99999999999)
-            lr.fit(prob_x_calib, y_calib)
 
-            # iso = IsotonicRegression()
-            # iso.fit(prob_x_calib, y_calib)
+            # model_calib = LogisticRegression(C=99999999999)
+            # model_calib.fit(prob_x_calib, y_calib)
+
+            model_calib = IsotonicRegression()
+            model_calib.fit(np.max(prob_x_calib, axis=1), y_calib)
 
             prob_x_test = model.predict_proba(x_test)
-            prob_x_test_calib = lr.predict_proba(prob_x_test)
+            # prob_x_test_calib = model_calib.predict_proba(prob_x_test)
+            prob_x_test_calib = model_calib.predict(np.max(prob_x_test, axis=1))
 
             # check ECE value for normal and calib model
-            # model_ece = expected_calibration_error(prob_x_test, model.predict(x_test), y_test, bins=10, equal_bin_size=True)
-            # modelcalib_ece = expected_calibration_error(prob_x_test_calib, lr.predict(prob_x_test), y_test, bins=10, equal_bin_size=True)
-                    
+            model_ece = expected_calibration_error(prob_x_test, model.predict(x_test), y_test, bins=10, equal_bin_size=True)
+            # modelcalib_ece = expected_calibration_error(prob_x_test_calib, model_calib.predict(prob_x_test), y_test, bins=10, equal_bin_size=True)
+            modelcalib_ece = expected_calibration_error(prob_x_test_calib, model_calib.predict(np.max(prob_x_test, axis=1)), y_test, bins=10, equal_bin_size=True)
+
+            print(f"model ece {model_ece} modelcalib ece {modelcalib_ece}")
+            exit()
+
             prob_x_test_idoodmix = model.predict_proba(x_test_idoodmix)
-            prob_x_test_calib_idoodmix = lr.predict_proba(prob_x_test_idoodmix)
+            prob_x_test_calib_idoodmix = model_calib.predict_proba(prob_x_test_idoodmix)
 
             # print(prob_x_test[1])
             # print(prob_x_test_calib[1])
