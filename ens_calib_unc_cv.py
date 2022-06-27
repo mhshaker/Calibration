@@ -13,6 +13,7 @@ from sklearn.utils import shuffle
 from sklearn.calibration import CalibratedClassifierCV, CalibrationDisplay
 from sklearn.metrics import roc_auc_score
 from sklearn.calibration import calibration_curve
+from sklearn.datasets import make_blobs
 import ray
 
 
@@ -48,12 +49,15 @@ def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_si
 
 
 #dataset_list = ["cifar10small", "connect-4", "bank-marketing", "Amazon_employee_access", "adult"] # "MagicTelescope", "eeg-eye-state", 
-dataset_list = ["amazon-commerce-reviews"]
+dataset_list = ["fashionMnist","cifar10small","amazon-commerce-reviews"]
+dataset_list = ['sim']
 
 for dataset in dataset_list:
     # load data
 
-    if dataset == "cifar10small":
+    if dataset == "sim":
+        features, target = make_blobs(n_samples=20000, n_features=3, centers=10, random_state=42, cluster_std=5.0)
+    elif dataset == "cifar10small" or dataset == "fashionMnist":
         features, target = dp.load_data(dataset)
     else:
         features, target = dp.load_arff_2(dataset)
@@ -111,33 +115,26 @@ for dataset in dataset_list:
             predictions_x_test = model.predict(x_test)
             # print("Ens model test score = ", model.score(x_test, y_test))
             
+            # print(">>>> ",len(x_calib))
             # train calibrated model
-            # calib_method = "isotonic" # 
-            # model_calib = CalibratedClassifierCV(model, cv=5, method=calib_method)
-            # model_calib.fit(x_train, y_train)
+            calib_method = "sigmoid" #"isotonic" # 
+            model_calib = CalibratedClassifierCV(model, cv=3, method=calib_method)
+            model_calib.fit(x_calib , y_calib)
 
-            prob_x_calib = model.predict_proba(x_calib)
-
-            # model_calib = LogisticRegression(C=99999999999)
-            # model_calib.fit(prob_x_calib, y_calib)
-
-            model_calib = IsotonicRegression()
-            model_calib.fit(np.max(prob_x_calib, axis=1), y_calib)
 
             prob_x_test = model.predict_proba(x_test)
-            # prob_x_test_calib = model_calib.predict_proba(prob_x_test)
-            prob_x_test_calib = model_calib.predict(np.max(prob_x_test, axis=1))
+            prob_x_test_calib = model_calib.predict_proba(x_test)
 
             # check ECE value for normal and calib model
-            model_ece = expected_calibration_error(prob_x_test, model.predict(x_test), y_test, bins=10, equal_bin_size=True)
-            # modelcalib_ece = expected_calibration_error(prob_x_test_calib, model_calib.predict(prob_x_test), y_test, bins=10, equal_bin_size=True)
-            modelcalib_ece = expected_calibration_error(prob_x_test_calib, model_calib.predict(np.max(prob_x_test, axis=1)), y_test, bins=10, equal_bin_size=True)
+            # model_ece = expected_calibration_error(prob_x_test, model.predict(x_test), y_test, bins=10, equal_bin_size=True)
+            # modelcalib_ece = expected_calibration_error(prob_x_test_calib, model_calib.predict(x_test), y_test, bins=10, equal_bin_size=True)
 
-            print(f"model ece {model_ece} modelcalib ece {modelcalib_ece}")
-            exit()
+            # print(f"model ece {model_ece} modelcalib ece {modelcalib_ece}")
+
+        
 
             prob_x_test_idoodmix = model.predict_proba(x_test_idoodmix)
-            prob_x_test_calib_idoodmix = model_calib.predict_proba(prob_x_test_idoodmix)
+            prob_x_test_calib_idoodmix = model_calib.predict_proba(x_test_idoodmix)
 
             # print(prob_x_test[1])
             # print(prob_x_test_calib[1])
@@ -147,11 +144,11 @@ for dataset in dataset_list:
 
             # unc Q id
             tu, eu, au = unc.model_uncertainty(model, x_test, x_train, y_train)
-            tumc, eumc, aumc = unc.calib_ens_member_uncertainty(model, x_test, x_train, y_train, x_calib, y_calib)
+            tumc, eumc, aumc = unc.calib_ens_member_uncertainty(model, x_test, x_train, y_train, x_calib, y_calib, calib_method)
             tuc = unc.calib_ens_total_uncertainty(prob_x_test_calib)
             # unc Q id OOD 
             tu_ood, eu_ood, au_ood = unc.model_uncertainty(model, x_test_idoodmix, x_train, y_train)
-            tumc_ood, eumc_ood, aumc_ood = unc.calib_ens_member_uncertainty(model, x_test_idoodmix, x_train, y_train, x_calib, y_calib)
+            tumc_ood, eumc_ood, aumc_ood = unc.calib_ens_member_uncertainty(model, x_test_idoodmix, x_train, y_train, x_calib, y_calib, calib_method)
             tuc_ood = unc.calib_ens_total_uncertainty(prob_x_test_calib_idoodmix)
 
             # acc-rej
