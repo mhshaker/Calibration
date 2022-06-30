@@ -49,7 +49,7 @@ def calib_ale_test(features, target, seed):
 
     return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc
 
-dataset_list = ['CIFAR10'] # 'fashionMnist', 'amazon_movie'
+dataset_list = ['CIFAR100'] # 'fashionMnist', 'amazon_movie'
 
 for dataset in dataset_list:
     # load data

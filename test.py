@@ -8,15 +8,16 @@ def unpickle(file):
 
 features = []
 targets = []
-for i in ["1", "2", "3", "4", "5", "test"]:
-    d = unpickle(f"Data/cifar-10-batches-py/data_batch_{i}")
-    features.append(d[b'data'])
-    targets.append(d[b'labels'])
+for i in ["train", "test"]:
+    d = unpickle(f"Data/cifar-100-python/{i}")
+    f = d[b'data']
+    # print(d.keys())
+    features.append(np.array(d[b'data']))
+    targets.append(np.array(d[b'fine_labels']))
 
-features = np.array(features)
-features = np.reshape(features, (-1, features.shape[-1]))
-targets = np.reshape(np.array(targets), (-1,))
-# print(d.keys())
+features = np.concatenate((features[0], features[1]))
+targets = np.concatenate((targets[0], targets[1]))
+
 
 # print(d[b'labels'])
 print(features.shape)

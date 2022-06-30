@@ -35,7 +35,20 @@ def load_data(data_name):
 		features = np.array(features)
 		features = np.reshape(features, (-1, features.shape[-1]))
 		targets = np.reshape(np.array(targets), (-1,))
-		return features, targets 
+		return features, targets
+	elif data_name == "CIFAR100":
+		features = []
+		targets = []
+		for i in ["train", "test"]:
+			d = unpickle(f"Data/cifar-100-python/{i}")
+			f = d[b'data']
+			# print(d.keys())
+			features.append(np.array(d[b'data']))
+			targets.append(np.array(d[b'fine_labels']))
+
+		features = np.concatenate((features[0], features[1]))
+		targets = np.concatenate((targets[0], targets[1]))
+		return features, targets
 	elif data_name == 'amazon_movie':
 		import classes.io as iox
 		io = iox.Io('./')
