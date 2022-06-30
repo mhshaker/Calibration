@@ -46,12 +46,13 @@ def accuracy_rejection2(predictions_list, labels_list, uncertainty_list, log=Fal
 		predictions = np.array(predictions)
 		uncertainty = np.array(uncertainty)
 
-		correctness_map = []
-		for x, y in zip(predictions, labels):
-			if x == y:
-				correctness_map.append(1)
-			else:
-				correctness_map.append(0)
+		correctness_map = np.where(predictions == labels, 1, 0)
+		# correctness_map = []
+		# for x, y in zip(predictions, labels):
+		# 	if x == y:
+		# 		correctness_map.append(1)
+		# 	else:
+		# 		correctness_map.append(0)
 
 		correctness_map = np.array(correctness_map)
 		sorted_index = np.argsort(-uncertainty, kind='stable')
@@ -181,12 +182,13 @@ def accuracy_rejection(predictions_list, labels_list, uncertainty_list, unc_valu
 		predictions = np.array(predictions)
 		uncertainty = np.array(uncertainty)
 
-		correctness_map = []
-		for x, y in zip(predictions, labels):
-			if x == y:
-				correctness_map.append(1)
-			else:
-				correctness_map.append(0)
+		correctness_map = np.where(predictions == labels, 1, 0)
+		# correctness_map = []
+		# for x, y in zip(predictions, labels):
+		# 	if x == y:
+		# 		correctness_map.append(1)
+		# 	else:
+		# 		correctness_map.append(0)
 
 		# uncertainty, correctness_map = zip(*sorted(zip(uncertainty,correctness_map),reverse=False))
 
@@ -325,12 +327,14 @@ def uncertainty_correlation(predictions_list, labels_list, uncertainty_list, log
 		predictions = np.array(predictions)
 		uncertainty = np.array(uncertainty)
 
-		correctness_map = []
-		for x, y in zip(predictions, labels):
-			if x == y:
-				correctness_map.append(0) # switching the correctness labels just to get positive corr values
-			else:
-				correctness_map.append(1)
+		correctness_map = np.where(predictions == labels, 0, 1)
+
+		# correctness_map = []
+		# for x, y in zip(predictions, labels):
+		# 	if x == y:
+		# 		correctness_map.append(0) # switching the correctness labels just to get positive corr values
+		# 	else:
+		# 		correctness_map.append(1)
 
 		correctness_map = np.array(correctness_map)
 		sorted_index = np.argsort(-uncertainty, kind='stable')
@@ -358,12 +362,7 @@ def uncertainty_distribution(predictions_list, labels_list, uncertainty_list, lo
 		predictions = np.array(predictions)
 		uncertainty = np.array(uncertainty)
 
-		correctness_map = []
-		for x, y in zip(predictions, labels):
-			if x == y:
-				correctness_map.append(1) 
-			else:
-				correctness_map.append(0)
+		correctness_map = np.where(predictions == labels, 1, 0)
 		
 		# sort based on correctness_map
 
