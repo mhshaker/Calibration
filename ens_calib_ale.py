@@ -49,7 +49,7 @@ def calib_ale_test(features, target, seed):
 
     return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc
 
-dataset_list = ['amazon_movie']
+dataset_list = ['fashionMnist'] #['amazon_movie']
 
 for dataset in dataset_list:
     # load data
@@ -74,5 +74,6 @@ for dataset in dataset_list:
     res_txt += f"{res_array[5]* 100:.2f} Aleat uncertainty\n"
     res_txt += "EnsCalib \n"
     res_txt += f"{res_array[6]* 100:.2f} Total uncertainty\n"
-    with open(f"{dataset}_uncCalib.txt", "w") as text_file:
+    with open(f"uncCalib results/{dataset}_uncCalib.txt", "w") as text_file:
         text_file.write(res_txt)
+    print(f"{dataset} done")
