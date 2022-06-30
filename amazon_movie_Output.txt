@@ -1,0 +1,12 @@
+dataset amazon_movie
+------------------------------------acc-rej
+Ens 
+77.98 Total uncertainty
+68.99 Epist uncertainty
+68.49 Aleat uncertainty
+MemberCalib 
+77.96 Total uncertainty
+63.69 Epist uncertainty
+77.17 Aleat uncertainty
+EnsCalib 
+78.63 Total uncertainty
