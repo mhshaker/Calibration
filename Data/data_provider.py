@@ -11,13 +11,32 @@ from sklearn import preprocessing
 from scipy.io import arff
 from sklearn.datasets import make_blobs
 
+
+def unpickle(file): # for reading the CIFAR dataset
+    import pickle
+    with open(file, 'rb') as fo:
+        dict = pickle.load(fo, encoding='bytes')
+    return dict
+
+
+
 def load_data(data_name):   
 	if data_name == "sim":
 		features, targets = make_blobs(n_samples=2000, n_features=3, centers=2, random_state=42, cluster_std=5.0)
 		return features, targets
-	if data_name == "Jdata/dbpedia":
-		features, target = datasets.load_svmlight_file("Data/Jdata/dbpedia_train.svm")
-	if data_name == 'amazon_movie':
+	elif data_name == "CIFAR10":
+		features = []
+		targets = []
+		for i in ["1", "2", "3", "4", "5", "test"]:
+			d = unpickle(f"Data/cifar-10-batches-py/data_batch_{i}")
+			features.append(d[b'data'])
+			targets.append(d[b'labels'])
+
+		features = np.array(features)
+		features = np.reshape(features, (-1, features.shape[-1]))
+		targets = np.reshape(np.array(targets), (-1,))
+		return features, targets 
+	elif data_name == 'amazon_movie':
 		import classes.io as iox
 		io = iox.Io('./')
 
@@ -50,6 +69,9 @@ def load_data(data_name):
 		targets = np.concatenate((target_1,target_5))
 		targets = targets[:,0]
 		return features, targets
+
+	if data_name == "Jdata/dbpedia":
+		features, target = datasets.load_svmlight_file("Data/Jdata/dbpedia_train.svm")
 
 
 	df = pd.read_csv(f'./Data/{data_name}.csv')
