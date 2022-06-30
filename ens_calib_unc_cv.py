@@ -49,15 +49,16 @@ def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_si
 
 
 #dataset_list = ["cifar10small", "connect-4", "bank-marketing", "Amazon_employee_access", "adult"] # "MagicTelescope", "eeg-eye-state", 
-dataset_list = ["fashionMnist","cifar10small","amazon-commerce-reviews"]
-dataset_list = ['sim']
+# dataset_list = ["fashionMnist","cifar10small","amazon-commerce-reviews"]
+dataset_list = ['amazon_movie']
+OOD_test = False
 
 for dataset in dataset_list:
     # load data
 
     if dataset == "sim":
-        features, target = make_blobs(n_samples=20000, n_features=3, centers=10, random_state=42, cluster_std=5.0)
-    elif dataset == "cifar10small" or dataset == "fashionMnist":
+        features, target = make_blobs(n_samples=2000, n_features=3, centers=2, random_state=42, cluster_std=5.0)
+    elif dataset == "cifar10small" or dataset == "fashionMnist" or dataset == "amazon_movie":
         features, target = dp.load_data(dataset)
     else:
         features, target = dp.load_arff_2(dataset)
@@ -84,16 +85,21 @@ for dataset in dataset_list:
     for seed in range(10):
         # seperate id from ood
         features, target = shuffle(features, target, random_state=seed)
-        classes = np.unique(target)
-        selected_id = np.random.choice(classes,int(len(classes)/2),replace=False) # select id classes
-        id_index = np.argwhere(np.isin(target,selected_id)) # get index of all id instances
-        ood_index = np.argwhere(np.isin(target,selected_id,invert=True)) # get index of all not selected classes (OOD)
+        if OOD_test:
+            classes = np.unique(target)
+            selected_id = np.random.choice(classes,int(len(classes)/2),replace=False) # select id classes
+            id_index = np.argwhere(np.isin(target,selected_id)) # get index of all id instances
+            ood_index = np.argwhere(np.isin(target,selected_id,invert=True)) # get index of all not selected classes (OOD)
 
         cv_outer = KFold(n_splits=5, shuffle=False)
         for train_ix, test_ix in cv_outer.split(features):
             # geting the train and test data with the Kfold indexes intersected with id data
-            x_train, x_test_all = features[np.intersect1d(train_ix, id_index)], features[np.intersect1d(test_ix, id_index)]
-            y_train, y_test_all = target[np.intersect1d(train_ix, id_index)], target[np.intersect1d(test_ix, id_index)]
+            if OOD_test:
+                x_train, x_test_all = features[np.intersect1d(train_ix, id_index)], features[np.intersect1d(test_ix, id_index)]
+                y_train, y_test_all = target[np.intersect1d(train_ix, id_index)], target[np.intersect1d(test_ix, id_index)]
+            else:
+                x_train, x_test_all = features[train_ix], features[test_ix]
+                y_train, y_test_all = target[train_ix], target[test_ix]
             # spliting all test data to test and calibration
             test_len = len(x_test_all)
             x_test  = x_test_all[:int(test_len/2)]
@@ -102,12 +108,13 @@ for dataset in dataset_list:
             y_calib = y_test_all[int(test_len/2):]
             
             # create ood test dataset with mix of id and ood
-            x_ood,   y_ood  = features[np.intersect1d(test_ix, ood_index)],target[np.intersect1d(test_ix, ood_index)]
-            minlen = len(x_test)
-            if len(x_ood) < minlen:
-                minlen = len(x_ood)
-            y_test_idoodmix = np.concatenate((np.zeros(minlen), np.ones(minlen)), axis=0)
-            x_test_idoodmix = np.concatenate((x_test[:minlen], x_ood[:minlen]), axis=0)
+            if OOD_test:
+                x_ood,   y_ood  = features[np.intersect1d(test_ix, ood_index)],target[np.intersect1d(test_ix, ood_index)]
+                minlen = len(x_test)
+                if len(x_ood) < minlen:
+                    minlen = len(x_ood)
+                y_test_idoodmix = np.concatenate((np.zeros(minlen), np.ones(minlen)), axis=0)
+                x_test_idoodmix = np.concatenate((x_test[:minlen], x_ood[:minlen]), axis=0)
 
             # train normal model
             model = RandomForestClassifier(max_depth=10, n_estimators=10, random_state=seed)
@@ -117,8 +124,8 @@ for dataset in dataset_list:
             
             # print(">>>> ",len(x_calib))
             # train calibrated model
-            calib_method = "sigmoid" #"isotonic" # 
-            model_calib = CalibratedClassifierCV(model, cv=3, method=calib_method)
+            calib_method = "isotonic" # "sigmoid" # 
+            model_calib = CalibratedClassifierCV(model, cv=5, method=calib_method)
             model_calib.fit(x_calib , y_calib)
 
 
@@ -132,9 +139,9 @@ for dataset in dataset_list:
             # print(f"model ece {model_ece} modelcalib ece {modelcalib_ece}")
 
         
-
-            prob_x_test_idoodmix = model.predict_proba(x_test_idoodmix)
-            prob_x_test_calib_idoodmix = model_calib.predict_proba(x_test_idoodmix)
+            if OOD_test:
+                prob_x_test_idoodmix = model.predict_proba(x_test_idoodmix)
+                prob_x_test_calib_idoodmix = model_calib.predict_proba(x_test_idoodmix)
 
             # print(prob_x_test[1])
             # print(prob_x_test_calib[1])
@@ -147,9 +154,10 @@ for dataset in dataset_list:
             tumc, eumc, aumc = unc.calib_ens_member_uncertainty(model, x_test, x_train, y_train, x_calib, y_calib, calib_method)
             tuc = unc.calib_ens_total_uncertainty(prob_x_test_calib)
             # unc Q id OOD 
-            tu_ood, eu_ood, au_ood = unc.model_uncertainty(model, x_test_idoodmix, x_train, y_train)
-            tumc_ood, eumc_ood, aumc_ood = unc.calib_ens_member_uncertainty(model, x_test_idoodmix, x_train, y_train, x_calib, y_calib, calib_method)
-            tuc_ood = unc.calib_ens_total_uncertainty(prob_x_test_calib_idoodmix)
+            if OOD_test:
+                tu_ood, eu_ood, au_ood = unc.model_uncertainty(model, x_test_idoodmix, x_train, y_train)
+                tumc_ood, eumc_ood, aumc_ood = unc.calib_ens_member_uncertainty(model, x_test_idoodmix, x_train, y_train, x_calib, y_calib, calib_method)
+                tuc_ood = unc.calib_ens_total_uncertainty(prob_x_test_calib_idoodmix)
 
             # acc-rej
             # ens
@@ -164,16 +172,17 @@ for dataset in dataset_list:
             tuc_auroc.append(uncM.unc_auroc(predictions_x_test, y_test, tuc))
 
             # OOD test
-            # ens
-            tu_ood_auroc.append(roc_auc_score(y_test_idoodmix, tu_ood))
-            eu_ood_auroc.append(roc_auc_score(y_test_idoodmix, eu_ood))
-            au_ood_auroc.append(roc_auc_score(y_test_idoodmix, au_ood))
-            # ens member calib
-            tumc_ood_auroc.append(roc_auc_score(y_test_idoodmix, tumc_ood))
-            eumc_ood_auroc.append(roc_auc_score(y_test_idoodmix, eumc_ood))
-            aumc_ood_auroc.append(roc_auc_score(y_test_idoodmix, aumc_ood))
-            # ens calib
-            tuc_ood_auroc.append(roc_auc_score(y_test_idoodmix, tuc_ood))
+            if OOD_test:
+                # ens
+                tu_ood_auroc.append(roc_auc_score(y_test_idoodmix, tu_ood))
+                eu_ood_auroc.append(roc_auc_score(y_test_idoodmix, eu_ood))
+                au_ood_auroc.append(roc_auc_score(y_test_idoodmix, au_ood))
+                # ens member calib
+                tumc_ood_auroc.append(roc_auc_score(y_test_idoodmix, tumc_ood))
+                eumc_ood_auroc.append(roc_auc_score(y_test_idoodmix, eumc_ood))
+                aumc_ood_auroc.append(roc_auc_score(y_test_idoodmix, aumc_ood))
+                # ens calib
+                tuc_ood_auroc.append(roc_auc_score(y_test_idoodmix, tuc_ood))
 
 
     tu_auroc_avg = np.array(tu_auroc).mean()
@@ -197,22 +206,23 @@ for dataset in dataset_list:
     print("EnsCalib")
     print(f"{tuc_auroc_avg* 100:.2f} Total uncertainty") 
 
-    tu_ood_auroc_avg = np.array(tu_ood_auroc).mean()
-    eu_ood_auroc_avg = np.array(eu_ood_auroc).mean()
-    au_ood_auroc_avg = np.array(au_ood_auroc).mean()
-    tumc_ood_auroc_avg = np.array(tumc_ood_auroc).mean()
-    eumc_ood_auroc_avg = np.array(eumc_ood_auroc).mean()
-    aumc_ood_auroc_avg = np.array(aumc_ood_auroc).mean()
-    tuc_ood_auroc_avg = np.array(tuc_ood_auroc).mean()
+    if OOD_test:
+        tu_ood_auroc_avg = np.array(tu_ood_auroc).mean()
+        eu_ood_auroc_avg = np.array(eu_ood_auroc).mean()
+        au_ood_auroc_avg = np.array(au_ood_auroc).mean()
+        tumc_ood_auroc_avg = np.array(tumc_ood_auroc).mean()
+        eumc_ood_auroc_avg = np.array(eumc_ood_auroc).mean()
+        aumc_ood_auroc_avg = np.array(aumc_ood_auroc).mean()
+        tuc_ood_auroc_avg = np.array(tuc_ood_auroc).mean()
 
-    print("------------------------------------OOD test")
-    print("Ens")
-    print(f"{tu_ood_auroc_avg* 100:.2f} Total uncertainty") 
-    print(f"{eu_ood_auroc_avg* 100:.2f} Epist uncertainty") 
-    print(f"{au_ood_auroc_avg* 100:.2f} Aleat uncertainty") 
-    print("EnsMemberCalib")
-    print(f"{tumc_ood_auroc_avg* 100:.2f} Total uncertainty") 
-    print(f"{eumc_ood_auroc_avg* 100:.2f} Epist uncertainty") 
-    print(f"{aumc_ood_auroc_avg* 100:.2f} Aleat uncertainty") 
-    print("EnsCalib")
-    print(f"{tuc_ood_auroc_avg* 100:.2f} Total uncertainty") 
+        print("------------------------------------OOD test")
+        print("Ens")
+        print(f"{tu_ood_auroc_avg* 100:.2f} Total uncertainty") 
+        print(f"{eu_ood_auroc_avg* 100:.2f} Epist uncertainty") 
+        print(f"{au_ood_auroc_avg* 100:.2f} Aleat uncertainty") 
+        print("EnsMemberCalib")
+        print(f"{tumc_ood_auroc_avg* 100:.2f} Total uncertainty") 
+        print(f"{eumc_ood_auroc_avg* 100:.2f} Epist uncertainty") 
+        print(f"{aumc_ood_auroc_avg* 100:.2f} Aleat uncertainty") 
+        print("EnsCalib")
+        print(f"{tuc_ood_auroc_avg* 100:.2f} Total uncertainty") 

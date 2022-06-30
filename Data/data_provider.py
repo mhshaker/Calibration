@@ -9,9 +9,12 @@ from sklearn import datasets
 from sklearn.utils import resample
 from sklearn import preprocessing
 from scipy.io import arff
+from sklearn.datasets import make_blobs
 
 def load_data(data_name):   
-
+	if data_name == "sim":
+		features, targets = make_blobs(n_samples=2000, n_features=3, centers=2, random_state=42, cluster_std=5.0)
+		return features, targets
 	if data_name == "Jdata/dbpedia":
 		features, target = datasets.load_svmlight_file("Data/Jdata/dbpedia_train.svm")
 	if data_name == 'amazon_movie':

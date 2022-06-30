@@ -71,7 +71,7 @@ def get_member_calib_prob(model_ens, x_data, X_calib, y_calib, calib_method="iso
     prob_matrix  = []
 
     for estimator in model_ens.estimators_:
-        model_calib = CalibratedClassifierCV(estimator, cv=3, method=calib_method)
+        model_calib = CalibratedClassifierCV(estimator, cv=30, method=calib_method)
         # model_calib = LogisticRegression(C=99999999999)
         # tree_prob_x_calib = estimator.predict_proba(X_calib)
         model_calib.fit(X_calib, y_calib)
