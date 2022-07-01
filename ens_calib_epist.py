@@ -12,7 +12,7 @@ import ray
 from sklearn.utils import shuffle
 from sklearn.metrics import roc_auc_score
 
-dataset_list = ['fashionMnist', 'CIFAR10', 'CIFAR100'] 
+dataset_list = ['CIFAR100'] # 'fashionMnist', 'CIFAR10',
 run_name = "uncCalib epist RF_d"
 
 @ray.remote
