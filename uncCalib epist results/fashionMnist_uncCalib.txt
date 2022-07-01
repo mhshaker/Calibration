@@ -1,0 +1,12 @@
+dataset fashionMnist
+------------------------------------OOD test 
+Ens 
+69.42 Total uncertainty
+70.60 Epist uncertainty
+66.14 Aleat uncertainty
+MemberCalib 
+73.94 Total uncertainty
+77.94 Epist uncertainty
+70.04 Aleat uncertainty
+EnsCalib 
+71.05 Total uncertainty

@@ -74,6 +74,6 @@ for dataset in dataset_list:
     res_txt += f"{res_array[5]* 100:.2f} Aleat uncertainty\n"
     res_txt += "EnsCalib \n"
     res_txt += f"{res_array[6]* 100:.2f} Total uncertainty\n"
-    with open(f"uncCalib results/{dataset}_uncCalib.txt", "w") as text_file:
+    with open(f"uncCalib Ale results/{dataset}_uncCalib.txt", "w") as text_file:
         text_file.write(res_txt)
     print(f"{dataset} done")
