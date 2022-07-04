@@ -12,8 +12,8 @@ import ray
 from sklearn.utils import shuffle
 from sklearn.metrics import roc_auc_score
 
-dataset_list = ['CIFAR100'] # 'fashionMnist', 'CIFAR10',
-run_name = "uncCalib epist RF_d"
+dataset_list = ['CIFAR10'] # 'fashionMnist', 'CIFAR10',
+run_name = "uncCalib epist aleSort"
 
 @ray.remote
 def calib_ale_test(features, target, seed):
@@ -28,21 +28,26 @@ def calib_ale_test(features, target, seed):
     x_train, x_test_all, y_train, y_test_all = train_test_split(features[id_index], target[id_index], test_size=0.4, shuffle=True, random_state=seed)
     x_test, x_calib, y_test, y_calib = train_test_split(x_test_all, y_test_all, test_size=0.5, shuffle=True, random_state=seed) 
     x_ood,   _  = features[ood_index], target[ood_index]
-    minlen = len(x_test)
-    if len(x_ood) < minlen:
-        minlen = len(x_ood)
-    y_test_idoodmix = np.concatenate((np.zeros(minlen), np.ones(minlen)), axis=0)
-    x_test_idoodmix = np.concatenate((x_test[:minlen], x_ood[:minlen]), axis=0)
-
+    
     # train normal model
-    model = RandomForestClassifier(random_state=seed) # max_depth=10, n_estimators=10, 
+    model = RandomForestClassifier(max_depth=10, n_estimators=10, random_state=seed) # 
     model.fit(x_train, y_train)
-    predictions_x_test = model.predict(x_test)
     
     # train calibrated model
     calib_method = "isotonic" # "sigmoid" # 
     model_calib = CalibratedClassifierCV(model, cv=30, method=calib_method)
     model_calib.fit(x_calib , y_calib)
+
+    # aleatoric uncertainty on OOD data to sort based on it
+    _, _, au = unc.model_uncertainty(model, x_ood, x_train, y_train)
+    sorted_index = np.argsort(au, kind='stable')
+    x_ood = x_ood[sorted_index]
+
+    minlen = len(x_test)
+    if len(x_ood) < minlen:
+        minlen = len(x_ood)
+    y_test_idoodmix = np.concatenate((np.zeros(minlen), np.ones(minlen)), axis=0)
+    x_test_idoodmix = np.concatenate((x_test[:minlen], x_ood[:minlen]), axis=0)
 
     prob_x_test_calib_idoodmix = model_calib.predict_proba(x_test_idoodmix)
 
@@ -70,7 +75,7 @@ for dataset in dataset_list:
     features, target = dp.load_data(dataset)
 
     ray_array = []
-    for seed in range(1):
+    for seed in range(10):
         ray_array.append(calib_ale_test.remote(features, target, seed))
 
     res_array = np.array(ray.get(ray_array)).mean(axis=0)
