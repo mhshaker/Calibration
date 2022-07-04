@@ -1,0 +1,12 @@
+dataset CIFAR10
+------------------------------------acc-rej
+Ens 
+69.36 Total uncertainty
+47.75 Epist uncertainty
+65.94 Aleat uncertainty
+MemberCalib 
+66.80 Total uncertainty
+55.16 Epist uncertainty
+66.90 Aleat uncertainty
+EnsCalib 
+67.75 Total uncertainty

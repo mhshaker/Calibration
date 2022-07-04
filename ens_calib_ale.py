@@ -1,4 +1,4 @@
-from os import sep
+import os 
 import numpy as np
 import Uncertainty as unc
 import UncertaintyM as uncM
@@ -10,6 +10,10 @@ from sklearn.model_selection import KFold
 from sklearn.calibration import CalibratedClassifierCV
 import ray
 
+dataset_list = ['CIFAR10', 'CIFAR100'] # 'fashionMnist', 'amazon_movie'
+run_name = "uncCalib Ale RF_d"
+
+
 @ray.remote
 def calib_ale_test(features, target, seed):
     # seperate to train test calibration
@@ -17,7 +21,7 @@ def calib_ale_test(features, target, seed):
     x_test, x_calib, y_test, y_calib = train_test_split(x_test_all, y_test_all, test_size=0.5, shuffle=True, random_state=seed) 
     
     # train normal model
-    model = RandomForestClassifier(max_depth=10, n_estimators=10, random_state=seed)
+    model = RandomForestClassifier(random_state=seed) # max_depth=10, n_estimators=10, 
     model.fit(x_train, y_train)
     predictions_x_test = model.predict(x_test)
     
@@ -49,13 +53,12 @@ def calib_ale_test(features, target, seed):
 
     return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc
 
-dataset_list = ['CIFAR100'] # 'fashionMnist', 'amazon_movie'
+    ray.init()
 
 for dataset in dataset_list:
     # load data
     features, target = dp.load_data(dataset)
 
-    ray.init()
     ray_array = []
     for seed in range(10):
         ray_array.append(calib_ale_test.remote(features, target, seed))
@@ -74,6 +77,10 @@ for dataset in dataset_list:
     res_txt += f"{res_array[5]* 100:.2f} Aleat uncertainty\n"
     res_txt += "EnsCalib \n"
     res_txt += f"{res_array[6]* 100:.2f} Total uncertainty\n"
-    with open(f"uncCalib Ale results/{dataset}_uncCalib.txt", "w") as text_file:
+
+    if not os.path.exists(run_name):
+        os.makedirs(run_name)
+
+    with open(f"{run_name}/{dataset}_uncCalib.txt", "w") as text_file:
         text_file.write(res_txt)
     print(f"{dataset} done")
