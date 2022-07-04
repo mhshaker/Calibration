@@ -1,9 +1,7 @@
 import os
 import numpy as np
 import Uncertainty as unc
-import UncertaintyM as uncM
 import Data.data_provider as dp
-import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import KFold
@@ -13,7 +11,7 @@ from sklearn.utils import shuffle
 from sklearn.metrics import roc_auc_score
 
 dataset_list = ['CIFAR10'] # 'fashionMnist', 'CIFAR10',
-run_name = "uncCalib epist aleSort"
+run_name = "Results/uncCalib epist aleSort"
 
 @ray.remote
 def calib_ale_test(features, target, seed):

@@ -3,7 +3,6 @@ import numpy as np
 import Uncertainty as unc
 import UncertaintyM as uncM
 import Data.data_provider as dp
-import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import KFold
@@ -11,7 +10,7 @@ from sklearn.calibration import CalibratedClassifierCV
 import ray
 
 dataset_list = ['CIFAR10', 'CIFAR100'] # 'fashionMnist', 'amazon_movie'
-run_name = "uncCalib Ale RF_d"
+run_name = "Results/uncCalib Ale RF_d"
 
 
 @ray.remote
