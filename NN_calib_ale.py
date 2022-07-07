@@ -4,13 +4,14 @@ import Uncertainty as unc
 import UncertaintyM as uncM
 import Data.data_provider as dp
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import KFold
+from sklearn.neural_network import MLPClassifier
+# import tensorflow as tf
 from sklearn.calibration import CalibratedClassifierCV
 import ray
 
-dataset_list = ['CIFAR10', 'CIFAR100'] # 'fashionMnist', 'amazon_movie'
-run_name = "Results/uncCalib Ale RF_d"
+dataset_list = ['fashionMnist', 'CIFAR10', 'CIFAR100'] # 'fashionMnist', 'amazon_movie'
+# dataset_list = ['amazon_movie'] 
+run_name = "Results/uncCalib Ale NN"
 
 
 @ray.remote
@@ -20,9 +21,10 @@ def calib_ale_test(features, target, seed):
     x_test, x_calib, y_test, y_calib = train_test_split(x_test_all, y_test_all, test_size=0.5, shuffle=True, random_state=seed) 
     
     # train normal model
-    model = RandomForestClassifier(random_state=seed) # max_depth=10, n_estimators=10, 
+    model = MLPClassifier(solver='lbfgs', alpha=1e-5, hidden_layer_sizes=(5, 2), random_state=seed) 
     model.fit(x_train, y_train)
     predictions_x_test = model.predict(x_test)
+
     
     # train calibrated model
     calib_method = "isotonic" # "sigmoid" # 

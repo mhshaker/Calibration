@@ -4,7 +4,6 @@ import Uncertainty as unc
 import Data.data_provider as dp
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import KFold
 from sklearn.calibration import CalibratedClassifierCV
 import ray
 from sklearn.utils import shuffle
