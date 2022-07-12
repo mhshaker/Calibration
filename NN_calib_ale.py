@@ -6,7 +6,7 @@ import UncertaintyM as uncM
 import Data.data_provider as dp
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
-# import tensorflow_probability as tfp
+import tensorflow_probability as tfp
 from tensorflow import keras
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
@@ -52,7 +52,7 @@ def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_si
     return ece 
 
 
-@ray.remote
+# @ray.remote
 def calib_ale_test(features, target, model_path, seed):
     
     print("------------------------------------ ", seed)
@@ -90,18 +90,19 @@ def calib_ale_test(features, target, model_path, seed):
 
     # Temperature Scaling
 
-    # temp = tf.Variable(initial_value=1.0, trainable=True, dtype=tf.float32)
-    # def compute_loss():
-    #     y_pred_model_w_temp = tf.math.divide(prob_x_calib, temp)
-    #     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(\
-    #                                 tf.convert_to_tensor(keras.utils.to_categorical(Y)), y_pred_model_w_temp))
-    #     return loss
+    temp = tf.Variable(initial_value=1.0, trainable=True, dtype=tf.float32)
+    def compute_loss():
+        y_pred_model_w_temp = tf.math.divide(prob_x_calib, temp)
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(\
+                                    tf.convert_to_tensor(keras.utils.to_categorical(y_calib)), y_pred_model_w_temp))
+        return loss
 
-    # optimizer = tf.optimizers.Adam(learning_rate=0.01)
-    # print(f"Temperature Initial value: {temp.numpy()}")
-    # for i in range(300):
-    #     opts = optimizer.minimize(compute_loss, var_list=[temp])
-    # print(f"Temperature Final value: {temp.numpy()}")
+    optimizer = tf.optimizers.Adam(learning_rate=0.01)
+    print(f"Temperature Initial value: {temp.numpy()}")
+    for i in range(300):
+        opts = optimizer.minimize(compute_loss, var_list=[temp])
+    print(f"Temperature Final value: {temp.numpy()}")
+
 
 
     model_calib = BetaCalibration(parameters="abm")
@@ -113,11 +114,27 @@ def calib_ale_test(features, target, model_path, seed):
     second_class_probs = np.ones(len(prob_x_test_calib)) - prob_x_test_calib
     prob_x_test_calib = np.concatenate((prob_x_test_calib.reshape(-1,1), second_class_probs.reshape(-1,1)), axis=1)
 
-    # check ECE value for normal and calib model
+    # check ECE value for normal and calib model (my code)
     model_ece = expected_calibration_error(prob_x_test, predictions_x_test, y_test, bins=10, equal_bin_size=True)
     modelcalib_ece = expected_calibration_error(prob_x_test_calib, predictions_x_test, y_test, bins=10, equal_bin_size=True)
     print("Normal ECE ", model_ece)
     print("Calib  ECE ", modelcalib_ece)
+
+    # ECE result before calibration (TF code)
+    num_bins = 10
+    labels_true = tf.convert_to_tensor(y_test, dtype=tf.int32, name='labels_true')
+    logits = tf.convert_to_tensor(prob_x_test, dtype=tf.float32, name='logits')
+
+    print("Normal ECE TF ", tfp.stats.expected_calibration_error(num_bins=num_bins, logits=logits, labels_true=labels_true))
+
+    # ECE result after calibration
+    y_pred_model_w_temp = tf.math.divide(prob_x_test, temp)
+    logits = tf.convert_to_tensor(y_pred_model_w_temp, dtype=tf.float32, name='logits')
+
+    print("Calib ECE TF ", tfp.stats.expected_calibration_error(num_bins=num_bins, logits=logits, labels_true=labels_true))
+
+    exit()
+
 
     # # unc Q id
     # tu, eu, au = unc.model_uncertainty(model, x_test, x_train, y_train)
@@ -146,15 +163,15 @@ def calib_ale_test(features, target, model_path, seed):
     # return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc
     return tu_auroc, tuc_auroc
 
-ray.init()
+# ray.init()
 for dataset in dataset_list:
     # load data
     features, target = dp.load_data(dataset)
     model_path = f"Models/NN_{dataset}"
     ray_array = []
     for seed in range(1): # 10 
-        ray_array.append(calib_ale_test.remote(features, target, model_path, seed))
-        # calib_ale_test(features, target, model_path, seed)
+        # ray_array.append(calib_ale_test.remote(features, target, model_path, seed))
+        calib_ale_test(features, target, model_path, seed)
 
     res_array = np.array(ray.get(ray_array)).mean(axis=0)
 
