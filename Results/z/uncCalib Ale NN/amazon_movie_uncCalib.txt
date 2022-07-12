@@ -1,0 +1,6 @@
+dataset amazon_movie
+------------------------------------acc-rej
+Ens 
+85.80 Total uncertainty
+EnsCalib 
+83.42 Total uncertainty

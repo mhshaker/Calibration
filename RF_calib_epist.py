@@ -9,8 +9,8 @@ import ray
 from sklearn.utils import shuffle
 from sklearn.metrics import roc_auc_score
 
-dataset_list = ['CIFAR10'] # 'fashionMnist', 'CIFAR10',
-run_name = "Results/uncCalib epist aleSort"
+dataset_list = ['fashionMnist', 'CIFAR10', 'CIFAR100'] # 
+run_name = "Results/epist calib_cv_fix RF_d"
 
 @ray.remote
 def calib_ale_test(features, target, seed):
@@ -27,18 +27,18 @@ def calib_ale_test(features, target, seed):
     x_ood,   _  = features[ood_index], target[ood_index]
     
     # train normal model
-    model = RandomForestClassifier(max_depth=10, n_estimators=10, random_state=seed) # 
+    model = RandomForestClassifier(random_state=seed) # max_depth=10, n_estimators=10,
     model.fit(x_train, y_train)
     
     # train calibrated model
     calib_method = "isotonic" # "sigmoid" # 
-    model_calib = CalibratedClassifierCV(model, cv=30, method=calib_method)
+    model_calib = CalibratedClassifierCV(model, cv="prefit", method=calib_method)
     model_calib.fit(x_calib , y_calib)
 
-    # aleatoric uncertainty on OOD data to sort based on it
-    _, _, au = unc.model_uncertainty(model, x_ood, x_train, y_train)
-    sorted_index = np.argsort(au, kind='stable')
-    x_ood = x_ood[sorted_index]
+    # # aleatoric uncertainty on OOD data to sort based on it
+    # _, _, au = unc.model_uncertainty(model, x_ood, x_train, y_train)
+    # sorted_index = np.argsort(au, kind='stable')
+    # x_ood = x_ood[sorted_index]
 
     minlen = len(x_test)
     if len(x_ood) < minlen:

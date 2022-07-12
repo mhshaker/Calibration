@@ -8,8 +8,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.calibration import CalibratedClassifierCV
 import ray
 
-dataset_list = ['CIFAR10', 'CIFAR100'] # 'fashionMnist', 'amazon_movie'
-run_name = "Results/uncCalib Ale RF_d"
+dataset_list = ['fashionMnist', 'CIFAR10', 'CIFAR100'] # 'fashionMnist', 'amazon_movie'
+run_name = "Results/Ale calib_cv_fix"
 
 
 @ray.remote
@@ -19,13 +19,13 @@ def calib_ale_test(features, target, seed):
     x_test, x_calib, y_test, y_calib = train_test_split(x_test_all, y_test_all, test_size=0.5, shuffle=True, random_state=seed) 
     
     # train normal model
-    model = RandomForestClassifier(random_state=seed) # max_depth=10, n_estimators=10, 
+    model = RandomForestClassifier(max_depth=10, n_estimators=10, random_state=seed) # 
     model.fit(x_train, y_train)
     predictions_x_test = model.predict(x_test)
     
     # train calibrated model
     calib_method = "isotonic" # "sigmoid" # 
-    model_calib = CalibratedClassifierCV(model, cv=30, method=calib_method)
+    model_calib = CalibratedClassifierCV(model, cv="prefit", method=calib_method) # cv=30
     model_calib.fit(x_calib , y_calib)
 
 
@@ -50,8 +50,7 @@ def calib_ale_test(features, target, seed):
 
     return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc
 
-    ray.init()
-
+ray.init()
 for dataset in dataset_list:
     # load data
     features, target = dp.load_data(dataset)

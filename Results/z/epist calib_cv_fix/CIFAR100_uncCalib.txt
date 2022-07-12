@@ -1,0 +1,12 @@
+dataset CIFAR100
+------------------------------------OOD test 
+Ens 
+53.06 Total uncertainty
+50.15 Epist uncertainty
+52.45 Aleat uncertainty
+MemberCalib 
+51.51 Total uncertainty
+51.21 Epist uncertainty
+50.13 Aleat uncertainty
+EnsCalib 
+51.26 Total uncertainty
