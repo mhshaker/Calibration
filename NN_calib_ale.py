@@ -6,15 +6,19 @@ import UncertaintyM as uncM
 import Data.data_provider as dp
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
+# import tensorflow_probability as tfp
+from tensorflow import keras
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 from betacal import BetaCalibration
 
 import ray
 
+Train_new = True
+
 # dataset_list = ['fashionMnist', 'CIFAR10', 'CIFAR100'] # 'fashionMnist', 'amazon_movie'
-# dataset_list = ['fashionMnist'] 
-dataset_list = ['amazon_movie'] 
+dataset_list = ['fashionMnist'] 
+# dataset_list = ['amazon_movie'] 
 run_name = "Results/uncCalib Ale NN"
 
 def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_size=True):
@@ -56,18 +60,19 @@ def calib_ale_test(features, target, model_path, seed):
     # seperate to train test calibration
     x_train, x_test_all, y_train, y_test_all = train_test_split(features, target, test_size=0.4, shuffle=True, random_state=seed)
     x_test, x_calib, y_test, y_calib = train_test_split(x_test_all, y_test_all, test_size=0.5, shuffle=True, random_state=seed) 
-
+    print("train data shape >>>>>>> ", x_train.shape)
     # train normal model or load
-    if not os.path.exists(model_path_seed):
+    if not os.path.exists(model_path_seed) or Train_new==True:
         os.makedirs(model_path_seed)
         model = tf.keras.models.Sequential([
+            tf.keras.layers.Input(shape=(x_train.shape[1],)),
             # tf.keras.layers.Flatten(input_shape=(28, 28)),
             tf.keras.layers.Dense(128, activation='relu'),
             # tf.keras.layers.Dropout(0.2),
             tf.keras.layers.Dense(len(np.unique(y_train)), activation='softmax')
         ])
         model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-        model.fit(x_train, y_train, epochs=5)
+        model.fit(x_train, y_train, epochs=15, batch_size=8) # keras.utils.to_categorical(y_train)
         model.save(model_path_seed)
     else:
         print("loading model path: ", model_path_seed)
@@ -82,6 +87,23 @@ def calib_ale_test(features, target, model_path, seed):
     predictions_x_calib = prob_x_calib.argmax(axis=1)
 
     # train calibrated model
+
+    # Temperature Scaling
+
+    # temp = tf.Variable(initial_value=1.0, trainable=True, dtype=tf.float32)
+    # def compute_loss():
+    #     y_pred_model_w_temp = tf.math.divide(prob_x_calib, temp)
+    #     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(\
+    #                                 tf.convert_to_tensor(keras.utils.to_categorical(Y)), y_pred_model_w_temp))
+    #     return loss
+
+    # optimizer = tf.optimizers.Adam(learning_rate=0.01)
+    # print(f"Temperature Initial value: {temp.numpy()}")
+    # for i in range(300):
+    #     opts = optimizer.minimize(compute_loss, var_list=[temp])
+    # print(f"Temperature Final value: {temp.numpy()}")
+
+
     model_calib = BetaCalibration(parameters="abm")
     # model_calib = LogisticRegression(C=99999999999)
     # model_calib = IsotonicRegression()
