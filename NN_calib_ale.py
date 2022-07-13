@@ -19,7 +19,7 @@ Train_new = False
 
 # dataset_list = ['CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
 # dataset_list = ['fashionMnist'] 
-dataset_list = ['CIFAR10'] 
+dataset_list = ['CIFAR100'] 
 run_name = "Results/Ale NN 2"
 
 def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_size=True):
@@ -53,14 +53,23 @@ def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_si
     return ece 
 
 
-@ray.remote
-def calib_ale_test(ens_size, features, target, model_path, seed):
-    
+# @ray.remote
+def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
+
+    # reshape the data to have proper images for CIFAR10
+    if dataname == "CIFAR10" or dataname == "CIFAR100":
+        features = np.reshape(features, (-1,3,32,32))
+        features = features.transpose([0,2,3,1])
+        input_shape = (32, 32, 3)
+    else:
+        input_shape = (features.shape[1],)
+
     print("------------------------------------ ", seed)
     model_path_seed = model_path + "_run" + str(seed)
     # seperate to train test calibration
     x_train, x_test_all, y_train, y_test_all = train_test_split(features, target, test_size=0.4, shuffle=True, random_state=seed)
     x_test, x_calib, y_test, y_calib = train_test_split(x_test_all, y_test_all, test_size=0.5, shuffle=True, random_state=seed) 
+    print("x_train shape ", x_train.shape)
     # train normal model or load
     ensemble = []
     if not os.path.exists(model_path_seed) or Train_new==True:
@@ -69,16 +78,31 @@ def calib_ale_test(ens_size, features, target, model_path, seed):
         for i in range(ens_size):
             if Train_new==False:
                 os.makedirs(model_path_seed + "_member"  + str(i))
-            model = tf.keras.models.Sequential([
-                tf.keras.layers.Input(shape=(x_train.shape[1],)),
-                # tf.keras.layers.Flatten(input_shape=(28, 28)),
-                tf.keras.layers.Dense(128, activation='relu'),
-                tf.keras.layers.Dense(64, activation='relu'),
-                # tf.keras.layers.Dropout(0.2),
-                tf.keras.layers.Dense(len(np.unique(y_train)), activation='softmax')
-            ])
+
+            # Create model
+            model = tf.keras.models.Sequential()
+
+            # Add layers
+            model.add(tf.keras.layers.Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=input_shape))
+            model.add(tf.keras.layers.Conv2D(64, kernel_size=(3, 3), activation='relu'))
+            model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
+            model.add(tf.keras.layers.Dropout(0.25))
+
+            # Layer
+            model.add(tf.keras.layers.Conv2D(128, kernel_size=(3, 3), activation='relu'))
+            model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
+            model.add(tf.keras.layers.Conv2D(128, kernel_size=(3, 3), activation='relu'))
+            model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
+            model.add(tf.keras.layers.Dropout(0.25))
+
+            # Layer
+            model.add(tf.keras.layers.Flatten())
+            model.add(tf.keras.layers.Dense(1024, activation='relu'))
+            model.add(tf.keras.layers.Dropout(0.5))
+            model.add(tf.keras.layers.Dense(len(np.unique(y_train)), activation='softmax'))            
+            
             model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-            model.fit(x_train, y_train, epochs=15, batch_size=8) # keras.utils.to_categorical(y_train)
+            model.fit(x_train, y_train, batch_size=128, shuffle=True, epochs=50) # keras.utils.to_categorical(y_train)
             model.save(model_path_seed + "_member"  + str(i))
             ensemble.append(model)
     else:
@@ -86,6 +110,7 @@ def calib_ale_test(ens_size, features, target, model_path, seed):
         for i in range(ens_size):
             model = tf.keras.models.load_model(model_path_seed + "_member"  + str(i))
             ensemble.append(model)
+
 
     ens_x_test_prob = []
     ens_x_test_prob_calib = []
@@ -198,7 +223,7 @@ def calib_ale_test(ens_size, features, target, model_path, seed):
     return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc
     # return tu_auroc, tuc_auroc
 
-ray.init()
+# ray.init()
 for dataset in dataset_list:
     # load data
     features, target = dp.load_data(dataset)
@@ -206,8 +231,8 @@ for dataset in dataset_list:
     model_path = f"Models/NN_{dataset}"
     ray_array = []
     for seed in range(10): # 10 
-        ray_array.append(calib_ale_test.remote(ens_size, features, target, model_path, seed))
-        # calib_ale_test(ens_size, features, target, model_path, seed)
+        # ray_array.append(calib_ale_test.remote(ens_size, features, target, model_path, seed))
+        calib_ale_test(ens_size, features, target, model_path, seed)
 
     res_array = np.array(ray.get(ray_array)).mean(axis=0)
 
