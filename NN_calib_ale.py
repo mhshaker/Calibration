@@ -12,15 +12,18 @@ from tensorflow import keras
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 from betacal import BetaCalibration
-
 import ray
 
+####################################################### Parameters
 Train_new = False
-
-# dataset_list = ['CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
+runs = 10
+ens_size = 10
+run_name = "Results/Ale NNConv"
+dataset_list = ['fashionMnist', 'CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
 # dataset_list = ['fashionMnist'] 
-dataset_list = ['CIFAR100'] 
-run_name = "Results/Ale NN 2"
+# dataset_list = ['CIFAR100'] 
+####################################################### Parameters
+
 
 def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_size=True):
     prob_max = np.max(probs, axis=1) # find the most probabil class
@@ -53,7 +56,7 @@ def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_si
     return ece 
 
 
-# @ray.remote
+@ray.remote
 def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
 
     # reshape the data to have proper images for CIFAR10
@@ -61,15 +64,16 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
         features = np.reshape(features, (-1,3,32,32))
         features = features.transpose([0,2,3,1])
         input_shape = (32, 32, 3)
-    else:
-        input_shape = (features.shape[1],)
+    elif dataname == "fashionMnist":
+        features = np.reshape(features, (-1,28,28,1))
+        input_shape = (28,28,1)
 
     print("------------------------------------ ", seed)
     model_path_seed = model_path + "_run" + str(seed)
     # seperate to train test calibration
     x_train, x_test_all, y_train, y_test_all = train_test_split(features, target, test_size=0.4, shuffle=True, random_state=seed)
     x_test, x_calib, y_test, y_calib = train_test_split(x_test_all, y_test_all, test_size=0.5, shuffle=True, random_state=seed) 
-    print("x_train shape ", x_train.shape)
+
     # train normal model or load
     ensemble = []
     if not os.path.exists(model_path_seed) or Train_new==True:
@@ -223,16 +227,15 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc
     # return tu_auroc, tuc_auroc
 
-# ray.init()
+ray.init()
 for dataset in dataset_list:
     # load data
     features, target = dp.load_data(dataset)
-    ens_size = 10
     model_path = f"Models/NN_{dataset}"
     ray_array = []
-    for seed in range(10): # 10 
-        # ray_array.append(calib_ale_test.remote(ens_size, features, target, model_path, seed))
-        calib_ale_test(ens_size, features, target, model_path, seed)
+    for seed in range(runs): # 10 
+        ray_array.append(calib_ale_test.remote(ens_size, dataset, features, target, model_path, seed))
+        # calib_ale_test(ens_size, dataset, features, target, model_path, seed)
 
     res_array = np.array(ray.get(ray_array)).mean(axis=0)
 
