@@ -1,6 +1,7 @@
 import os
 from matplotlib.pyplot import axes 
 import numpy as np
+from sklearn import ensemble
 import Uncertainty as unc
 import UncertaintyM as uncM
 import Data.data_provider as dp
@@ -14,12 +15,12 @@ from betacal import BetaCalibration
 
 import ray
 
-Train_new = True
+Train_new = False
 
-# dataset_list = ['fashionMnist', 'CIFAR10', 'CIFAR100'] # 'fashionMnist', 'amazon_movie'
-dataset_list = ['fashionMnist'] 
-# dataset_list = ['amazon_movie'] 
-run_name = "Results/uncCalib Ale NN"
+# dataset_list = ['CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
+# dataset_list = ['fashionMnist'] 
+dataset_list = ['CIFAR10'] 
+run_name = "Results/Ale NN 2"
 
 def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_size=True):
     prob_max = np.max(probs, axis=1) # find the most probabil class
@@ -52,126 +53,161 @@ def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_si
     return ece 
 
 
-# @ray.remote
-def calib_ale_test(features, target, model_path, seed):
+@ray.remote
+def calib_ale_test(ens_size, features, target, model_path, seed):
     
     print("------------------------------------ ", seed)
-    model_path_seed = model_path + str(seed)
+    model_path_seed = model_path + "_run" + str(seed)
     # seperate to train test calibration
     x_train, x_test_all, y_train, y_test_all = train_test_split(features, target, test_size=0.4, shuffle=True, random_state=seed)
     x_test, x_calib, y_test, y_calib = train_test_split(x_test_all, y_test_all, test_size=0.5, shuffle=True, random_state=seed) 
-    print("train data shape >>>>>>> ", x_train.shape)
     # train normal model or load
+    ensemble = []
     if not os.path.exists(model_path_seed) or Train_new==True:
-        os.makedirs(model_path_seed)
-        model = tf.keras.models.Sequential([
-            tf.keras.layers.Input(shape=(x_train.shape[1],)),
-            # tf.keras.layers.Flatten(input_shape=(28, 28)),
-            tf.keras.layers.Dense(128, activation='relu'),
-            # tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.Dense(len(np.unique(y_train)), activation='softmax')
-        ])
-        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-        model.fit(x_train, y_train, epochs=15, batch_size=8) # keras.utils.to_categorical(y_train)
-        model.save(model_path_seed)
+        if Train_new==False:
+            os.makedirs(model_path_seed)
+        for i in range(ens_size):
+            if Train_new==False:
+                os.makedirs(model_path_seed + "_member"  + str(i))
+            model = tf.keras.models.Sequential([
+                tf.keras.layers.Input(shape=(x_train.shape[1],)),
+                # tf.keras.layers.Flatten(input_shape=(28, 28)),
+                tf.keras.layers.Dense(128, activation='relu'),
+                tf.keras.layers.Dense(64, activation='relu'),
+                # tf.keras.layers.Dropout(0.2),
+                tf.keras.layers.Dense(len(np.unique(y_train)), activation='softmax')
+            ])
+            model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+            model.fit(x_train, y_train, epochs=15, batch_size=8) # keras.utils.to_categorical(y_train)
+            model.save(model_path_seed + "_member"  + str(i))
+            ensemble.append(model)
     else:
         print("loading model path: ", model_path_seed)
-        model = tf.keras.models.load_model(model_path_seed)
+        for i in range(ens_size):
+            model = tf.keras.models.load_model(model_path_seed + "_member"  + str(i))
+            ensemble.append(model)
+
+    ens_x_test_prob = []
+    ens_x_test_prob_calib = []
+    ens_x_calib_prob = []
     
-    print("modle Eval ", model.evaluate(x_test, y_test))
+    for i in range(ens_size): 
+        # print(f"member {i} Eval ", ensemble[i].evaluate(x_test, y_test))
 
-    prob_x_test = model.predict(x_test)
-    predictions_x_test = prob_x_test.argmax(axis=1)
+        prob_x_test = ensemble[i].predict(x_test)
+        # predictions_x_test = prob_x_test.argmax(axis=1)
 
-    prob_x_calib = model.predict(x_calib)
-    predictions_x_calib = prob_x_calib.argmax(axis=1)
+        prob_x_calib = ensemble[i].predict(x_calib)
+        ens_x_calib_prob.append(prob_x_calib)
 
-    # train calibrated model
+        # train calibrated model: Temperature Scaling
+        temp = tf.Variable(initial_value=1.0, trainable=True, dtype=tf.float32)
+        def compute_loss():
+            y_pred_model_w_temp = tf.math.divide(prob_x_calib, temp)
+            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(\
+                                        tf.convert_to_tensor(keras.utils.to_categorical(y_calib)), y_pred_model_w_temp))
+            return loss
 
-    # Temperature Scaling
+        optimizer = tf.optimizers.Adam(learning_rate=0.01)
+        # print(f"Temperature Initial value: {temp.numpy()}")
+        for i in range(300):
+            opts = optimizer.minimize(compute_loss, var_list=[temp])
+        # print(f"Temperature Final value: {temp.numpy()}")
+        prob_x_test_calib = tf.math.divide(prob_x_test, temp).numpy()
+        # predictions_x_test_calib = prob_x_test_calib.argmax(axis=1)
 
+        ens_x_test_prob.append(prob_x_test)
+        ens_x_test_prob_calib.append(prob_x_test_calib)
+
+        # ECE result before calibration (TF code)
+        # num_bins = 10
+        # labels_true = tf.convert_to_tensor(y_test, dtype=tf.int32, name='labels_true')
+        # logits = tf.convert_to_tensor(prob_x_test, dtype=tf.float32, name='logits')
+        # print("Normal ECE TF ", tfp.stats.expected_calibration_error(num_bins=num_bins, logits=logits, labels_true=labels_true))
+        # # ECE result after calibration
+        # logits = tf.convert_to_tensor(prob_x_test_calib, dtype=tf.float32, name='logits')
+        # print("Calib ECE TF ", tfp.stats.expected_calibration_error(num_bins=num_bins, logits=logits, labels_true=labels_true))
+
+        # check ECE value for normal and calib model (my code)
+        # model_ece = expected_calibration_error(prob_x_test, predictions_x_test, y_test, bins=10, equal_bin_size=True)
+        # modelcalib_ece = expected_calibration_error(prob_x_test_calib, predictions_x_test, y_test, bins=10, equal_bin_size=True)
+        # print("Normal ECE ", model_ece)
+        # print("Calib  ECE ", modelcalib_ece)
+
+    # convert ens probs to np and transpose the dimentions for uncQ
+    ens_x_test_prob = np.array(ens_x_test_prob)
+    ens_x_test_prob_calib = np.array(ens_x_test_prob_calib)
+    ens_x_calib_prob = np.array(ens_x_calib_prob)
+
+    ens_x_test_prob = ens_x_test_prob.transpose([1,0,2])
+    ens_x_test_prob_calib = ens_x_test_prob_calib.transpose([1,0,2])
+    ens_x_calib_prob = ens_x_calib_prob.transpose([1,0,2])
+
+    # print("------------------------------------>>>>")
+    # print("ens_x_test_prob shape ", ens_x_test_prob.shape)
+    # print("ens_x_test_prob_calib shape ", ens_x_test_prob_calib.shape)
+
+    ens_x_calib_prob_avg = ens_x_calib_prob.mean(axis=1)
+    ens_x_test_prob_avg = ens_x_test_prob.mean(axis=1)
+    ens_x_test_prob_memcalib_avg = ens_x_test_prob_calib.mean(axis=1)
+
+    # train calibrated for ensemble avg prob
     temp = tf.Variable(initial_value=1.0, trainable=True, dtype=tf.float32)
     def compute_loss():
-        y_pred_model_w_temp = tf.math.divide(prob_x_calib, temp)
+        y_pred_model_w_temp = tf.math.divide(ens_x_calib_prob_avg, temp)
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(\
                                     tf.convert_to_tensor(keras.utils.to_categorical(y_calib)), y_pred_model_w_temp))
         return loss
 
     optimizer = tf.optimizers.Adam(learning_rate=0.01)
-    print(f"Temperature Initial value: {temp.numpy()}")
+    # print(f"Temperature Initial value: {temp.numpy()}")
     for i in range(300):
         opts = optimizer.minimize(compute_loss, var_list=[temp])
-    print(f"Temperature Final value: {temp.numpy()}")
+    # print(f"Temperature Final value: {temp.numpy()}")
+    ens_x_test_prob_avg_enscalib = tf.math.divide(ens_x_test_prob_avg, temp).numpy()
 
 
+    ens_x_test_predict = ens_x_calib_prob_avg.argmax(axis=1)
+    ens_x_test_predict_memcalib = ens_x_test_prob_memcalib_avg.argmax(axis=1)
+    ens_x_test_predict_enscalib = ens_x_test_prob_avg_enscalib.argmax(axis=1)
 
-    model_calib = BetaCalibration(parameters="abm")
-    # model_calib = LogisticRegression(C=99999999999)
-    # model_calib = IsotonicRegression()
-    model_calib.fit(prob_x_calib[:,0].reshape(-1, 1), y_calib)
+    # unc Q
+    tu, eu, au = uncM.uncertainty_ent_bays(ens_x_test_prob, np.ones(ens_size))
+    tumc, eumc, aumc = uncM.uncertainty_ent_bays(ens_x_test_prob_calib, np.ones(ens_size))
 
-    prob_x_test_calib = model_calib.predict(prob_x_test[:,0].reshape(-1, 1))
-    second_class_probs = np.ones(len(prob_x_test_calib)) - prob_x_test_calib
-    prob_x_test_calib = np.concatenate((prob_x_test_calib.reshape(-1,1), second_class_probs.reshape(-1,1)), axis=1)
-
-    # check ECE value for normal and calib model (my code)
-    model_ece = expected_calibration_error(prob_x_test, predictions_x_test, y_test, bins=10, equal_bin_size=True)
-    modelcalib_ece = expected_calibration_error(prob_x_test_calib, predictions_x_test, y_test, bins=10, equal_bin_size=True)
-    print("Normal ECE ", model_ece)
-    print("Calib  ECE ", modelcalib_ece)
-
-    # ECE result before calibration (TF code)
-    num_bins = 10
-    labels_true = tf.convert_to_tensor(y_test, dtype=tf.int32, name='labels_true')
-    logits = tf.convert_to_tensor(prob_x_test, dtype=tf.float32, name='logits')
-
-    print("Normal ECE TF ", tfp.stats.expected_calibration_error(num_bins=num_bins, logits=logits, labels_true=labels_true))
-
-    # ECE result after calibration
-    y_pred_model_w_temp = tf.math.divide(prob_x_test, temp)
-    logits = tf.convert_to_tensor(y_pred_model_w_temp, dtype=tf.float32, name='logits')
-
-    print("Calib ECE TF ", tfp.stats.expected_calibration_error(num_bins=num_bins, logits=logits, labels_true=labels_true))
-
-    exit()
-
-
-    # # unc Q id
-    # tu, eu, au = unc.model_uncertainty(model, x_test, x_train, y_train)
-    # tumc, eumc, aumc = unc.calib_ens_member_uncertainty(model, x_test, x_train, y_train, x_calib, y_calib, calib_method)
-
-    tu = unc.calib_ens_total_uncertainty(prob_x_test)
-    tuc = unc.calib_ens_total_uncertainty(prob_x_test_calib)
+    tu = unc.calib_ens_total_uncertainty(ens_x_test_prob_avg)
+    tuc = unc.calib_ens_total_uncertainty(ens_x_test_prob_avg_enscalib)
 
 
     # # acc-rej
     # # ens
-    tu_auroc = uncM.unc_auroc(predictions_x_test, y_test, tu)
-    # eu_auroc = uncM.unc_auroc(predictions_x_test, y_test, eu)
-    # au_auroc = uncM.unc_auroc(predictions_x_test, y_test, au)
+    tu_auroc = uncM.unc_auroc(ens_x_test_predict, y_test, tu)
+    eu_auroc = uncM.unc_auroc(ens_x_test_predict, y_test, eu)
+    au_auroc = uncM.unc_auroc(ens_x_test_predict, y_test, au)
     # # ens member calib
-    # tumc_auroc = uncM.unc_auroc(predictions_x_test, y_test, tumc) # predictions_x_test might change after calibration
-    # eumc_auroc = uncM.unc_auroc(predictions_x_test, y_test, eumc)
-    # aumc_auroc = uncM.unc_auroc(predictions_x_test, y_test, aumc)
+    tumc_auroc = uncM.unc_auroc(ens_x_test_predict_memcalib, y_test, tumc) # ens_x_test_predict_memcalib might change after calibration
+    eumc_auroc = uncM.unc_auroc(ens_x_test_predict_memcalib, y_test, eumc)
+    aumc_auroc = uncM.unc_auroc(ens_x_test_predict_memcalib, y_test, aumc)
     # # ens calib
-    tuc_auroc = uncM.unc_auroc(predictions_x_test, y_test, tuc)
+    tuc_auroc = uncM.unc_auroc(ens_x_test_predict_enscalib, y_test, tuc)
 
 
-    print("total uncertainty normal auc ", tu_auroc)
-    print("total uncertainty Calib  auc ", tuc_auroc)
-    
-    # return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc
-    return tu_auroc, tuc_auroc
+    # print("total uncertainty normal auc ", tu_auroc)
+    # print("total uncertainty Calib  auc ", tuc_auroc)
+    # exit()
+    return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc
+    # return tu_auroc, tuc_auroc
 
-# ray.init()
+ray.init()
 for dataset in dataset_list:
     # load data
     features, target = dp.load_data(dataset)
+    ens_size = 10
     model_path = f"Models/NN_{dataset}"
     ray_array = []
-    for seed in range(1): # 10 
-        # ray_array.append(calib_ale_test.remote(features, target, model_path, seed))
-        calib_ale_test(features, target, model_path, seed)
+    for seed in range(10): # 10 
+        ray_array.append(calib_ale_test.remote(ens_size, features, target, model_path, seed))
+        # calib_ale_test(ens_size, features, target, model_path, seed)
 
     res_array = np.array(ray.get(ray_array)).mean(axis=0)
 
@@ -179,12 +215,12 @@ for dataset in dataset_list:
     res_txt += f"------------------------------------acc-rej\n"
     res_txt += "Ens \n"
     res_txt += f"{res_array[0]* 100:.2f} Total uncertainty\n"
-    # res_txt += f"{res_array[1]* 100:.2f} Epist uncertainty\n"
-    # res_txt += f"{res_array[2]* 100:.2f} Aleat uncertainty\n"
-    # res_txt += "MemberCalib \n"
-    # res_txt += f"{res_array[3]* 100:.2f} Total uncertainty\n"
-    # res_txt += f"{res_array[4]* 100:.2f} Epist uncertainty\n"
-    # res_txt += f"{res_array[5]* 100:.2f} Aleat uncertainty\n"
+    res_txt += f"{res_array[1]* 100:.2f} Epist uncertainty\n"
+    res_txt += f"{res_array[2]* 100:.2f} Aleat uncertainty\n"
+    res_txt += "MemberCalib \n"
+    res_txt += f"{res_array[3]* 100:.2f} Total uncertainty\n"
+    res_txt += f"{res_array[4]* 100:.2f} Epist uncertainty\n"
+    res_txt += f"{res_array[5]* 100:.2f} Aleat uncertainty\n"
     res_txt += "EnsCalib \n"
     res_txt += f"{res_array[1]* 100:.2f} Total uncertainty\n"
 
