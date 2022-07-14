@@ -15,45 +15,14 @@ from betacal import BetaCalibration
 import ray
 
 ####################################################### Parameters
+log_ECE = False
 Train_new = False
-runs = 10
+runs = 1
 ens_size = 10
 run_name = "Results/Ale NNConv"
-dataset_list = ['fashionMnist', 'CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
-# dataset_list = ['fashionMnist'] 
-# dataset_list = ['CIFAR100'] 
+# dataset_list = ['fashionMnist', 'CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
+dataset_list = ['fashionMnist'] 
 ####################################################### Parameters
-
-
-def expected_calibration_error(probs, predictions, y_true, bins=10, equal_bin_size=True):
-    prob_max = np.max(probs, axis=1) # find the most probabil class
-    correctness_map = np.where(predictions==y_true, 1, 0) # determine which predictions are correct
-    ece = 0
-
-    if equal_bin_size == False:
-        bin_size = 1/bins
-        for bin in range(bins):
-            bin_indexes = np.where((prob_max > bin * bin_size) & (prob_max <= (bin+1) * bin_size))[0]
-            if len(bin_indexes) > 0:
-                bin_conf = prob_max[bin_indexes].mean()
-                bin_acc = correctness_map[bin_indexes].sum() / len(bin_indexes)
-                dif = abs(bin_conf - bin_acc)
-                ece += dif * len(bin_indexes)
-        ece = ece / len(predictions)
-    else: # equal_bin_size
-        sorted_index = np.argsort(prob_max, kind='stable') # sort probs
-        prob_max = prob_max[sorted_index]
-        correctness_map = correctness_map[sorted_index] 
-
-        bin_size = int(len(predictions) / bins)
-        for bin in range(bins):
-            bin_conf = prob_max[bin*bin_size:(bin+1)*bin_size].mean()
-            bin_acc = correctness_map[bin*bin_size:(bin+1)*bin_size].sum() / bin_size
-            dif = abs(bin_conf - bin_acc)
-            ece += dif 
-        ece = ece / bins
-
-    return ece 
 
 
 @ray.remote
@@ -124,7 +93,7 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
         # print(f"member {i} Eval ", ensemble[i].evaluate(x_test, y_test))
 
         prob_x_test = ensemble[i].predict(x_test)
-        # predictions_x_test = prob_x_test.argmax(axis=1)
+        ens_x_test_prob.append(prob_x_test)
 
         prob_x_calib = ensemble[i].predict(x_calib)
         ens_x_calib_prob.append(prob_x_calib)
@@ -143,25 +112,17 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
             opts = optimizer.minimize(compute_loss, var_list=[temp])
         # print(f"Temperature Final value: {temp.numpy()}")
         prob_x_test_calib = tf.math.divide(prob_x_test, temp).numpy()
-        # predictions_x_test_calib = prob_x_test_calib.argmax(axis=1)
-
-        ens_x_test_prob.append(prob_x_test)
         ens_x_test_prob_calib.append(prob_x_test_calib)
 
         # ECE result before calibration (TF code)
-        # num_bins = 10
-        # labels_true = tf.convert_to_tensor(y_test, dtype=tf.int32, name='labels_true')
-        # logits = tf.convert_to_tensor(prob_x_test, dtype=tf.float32, name='logits')
-        # print("Normal ECE TF ", tfp.stats.expected_calibration_error(num_bins=num_bins, logits=logits, labels_true=labels_true))
-        # # ECE result after calibration
-        # logits = tf.convert_to_tensor(prob_x_test_calib, dtype=tf.float32, name='logits')
-        # print("Calib ECE TF ", tfp.stats.expected_calibration_error(num_bins=num_bins, logits=logits, labels_true=labels_true))
-
-        # check ECE value for normal and calib model (my code)
-        # model_ece = expected_calibration_error(prob_x_test, predictions_x_test, y_test, bins=10, equal_bin_size=True)
-        # modelcalib_ece = expected_calibration_error(prob_x_test_calib, predictions_x_test, y_test, bins=10, equal_bin_size=True)
-        # print("Normal ECE ", model_ece)
-        # print("Calib  ECE ", modelcalib_ece)
+        if log_ECE:
+            num_bins = 20
+            labels_true = tf.convert_to_tensor(y_test, dtype=tf.int32, name='labels_true')
+            logits = tf.convert_to_tensor(prob_x_test, dtype=tf.float32, name='logits')
+            print("Normal ECE : ", tfp.stats.expected_calibration_error(num_bins=num_bins, logits=logits, labels_true=labels_true))
+            # ECE result after calibration
+            logits = tf.convert_to_tensor(prob_x_test_calib, dtype=tf.float32, name='logits')
+            print("Calib ECE : ", tfp.stats.expected_calibration_error(num_bins=num_bins, logits=logits, labels_true=labels_true))
 
     # convert ens probs to np and transpose the dimentions for uncQ
     ens_x_test_prob = np.array(ens_x_test_prob)
@@ -171,10 +132,6 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     ens_x_test_prob = ens_x_test_prob.transpose([1,0,2])
     ens_x_test_prob_calib = ens_x_test_prob_calib.transpose([1,0,2])
     ens_x_calib_prob = ens_x_calib_prob.transpose([1,0,2])
-
-    # print("------------------------------------>>>>")
-    # print("ens_x_test_prob shape ", ens_x_test_prob.shape)
-    # print("ens_x_test_prob_calib shape ", ens_x_test_prob_calib.shape)
 
     ens_x_calib_prob_avg = ens_x_calib_prob.mean(axis=1)
     ens_x_test_prob_avg = ens_x_test_prob.mean(axis=1)
