@@ -101,30 +101,9 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
         ens_x_calib_prob.append(prob_x_calib)
 
         # train calibrated model: Temperature Scaling
-        temp = tf.Variable(initial_value=1.0, trainable=True, dtype=tf.float32)
-        def compute_loss():
-            y_pred_model_w_temp = tf.math.divide(prob_x_calib, temp)
-            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(\
-                                        tf.convert_to_tensor(keras.utils.to_categorical(y_calib)), y_pred_model_w_temp))
-            return loss
-
-        optimizer = tf.optimizers.Adam(learning_rate=0.01)
-        # print(f"Temperature Initial value: {temp.numpy()}")
-        for i in range(300):
-            opts = optimizer.minimize(compute_loss, var_list=[temp])
-        print(f"Temperature Final value inline : {temp.numpy()}")
-        prob_x_test_calib = tf.math.divide(prob_x_test, temp).numpy()
-
-        # ------------------------------------------------------------------------- temp calib class test
         calib_model = TempCalibrator()
         calib_model.fit(prob_x_calib, y_calib)
-        prob_x_test_calib_class = calib_model.predict_proba(prob_x_test)
-        print(f"Temperature Final value class : {calib_model.temp.numpy()}")
-        print(prob_x_test_calib)
-        print("------------------------------------")
-        print(prob_x_test_calib_class)
-        exit()
-        # -------------------------------------------------------------------------end test
+        prob_x_test_calib = calib_model.predict_proba(prob_x_test)
 
         ens_x_test_prob_calib.append(prob_x_test_calib)
 
@@ -152,19 +131,9 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     ens_x_calib_prob_avg = ens_x_calib_prob.mean(axis=1)
 
     # train calibrated for ensemble avg prob
-    temp = tf.Variable(initial_value=1.0, trainable=True, dtype=tf.float32)
-    def compute_loss():
-        y_pred_model_w_temp = tf.math.divide(ens_x_calib_prob_avg, temp)
-        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(\
-                                    tf.convert_to_tensor(keras.utils.to_categorical(y_calib)), y_pred_model_w_temp))
-        return loss
-
-    optimizer = tf.optimizers.Adam(learning_rate=0.01)
-    # print(f"Temperature Initial value: {temp.numpy()}")
-    for i in range(300):
-        opts = optimizer.minimize(compute_loss, var_list=[temp])
-    # print(f"Temperature Final value: {temp.numpy()}")
-    ens_x_test_prob_avg_enscalib = tf.math.divide(ens_x_test_prob_avg, temp).numpy()
+    calib_model = TempCalibrator()
+    calib_model.fit(ens_x_calib_prob_avg, y_calib)
+    ens_x_test_prob_avg_enscalib = calib_model.predict_proba(ens_x_test_prob_avg)
 
 
     ens_x_test_predict = ens_x_test_prob_avg.argmax(axis=1)
