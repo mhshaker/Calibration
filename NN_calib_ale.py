@@ -14,19 +14,21 @@ from sklearn.linear_model import LogisticRegression
 from betacal import BetaCalibration
 import ray
 from sklearn.metrics import accuracy_score
+from dirichletcal.calib.fulldirichlet import FullDirichletCalibrator
+from temp_scaling import TempCalibrator
 
 ####################################################### Parameters
 log_ECE = False
 Train_new = False
-runs = 10
+runs = 1
 ens_size = 10
 run_name = "Results/Ale NNConv"
 # dataset_list = ['fashionMnist', 'CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
 dataset_list = ['fashionMnist'] 
 ####################################################### Parameters
 
-parallel_processing = True
-@ray.remote
+parallel_processing = False
+# @ray.remote
 def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
 
     # reshape the data to have proper images for CIFAR10
@@ -110,8 +112,20 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
         # print(f"Temperature Initial value: {temp.numpy()}")
         for i in range(300):
             opts = optimizer.minimize(compute_loss, var_list=[temp])
-        # print(f"Temperature Final value: {temp.numpy()}")
+        print(f"Temperature Final value inline : {temp.numpy()}")
         prob_x_test_calib = tf.math.divide(prob_x_test, temp).numpy()
+
+        # ------------------------------------------------------------------------- temp calib class test
+        calib_model = TempCalibrator()
+        calib_model.fit(prob_x_calib, y_calib)
+        prob_x_test_calib_class = calib_model.predict_proba(prob_x_test)
+        print(f"Temperature Final value class : {calib_model.temp.numpy()}")
+        print(prob_x_test_calib)
+        print("------------------------------------")
+        print(prob_x_test_calib_class)
+        exit()
+        # -------------------------------------------------------------------------end test
+
         ens_x_test_prob_calib.append(prob_x_test_calib)
 
         # ECE result before calibration (TF code)
