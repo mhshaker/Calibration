@@ -13,18 +13,19 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 from betacal import BetaCalibration
 import ray
+from sklearn.metrics import accuracy_score
 
 ####################################################### Parameters
 log_ECE = False
 Train_new = False
-runs = 1
+runs = 10
 ens_size = 10
 run_name = "Results/Ale NNConv"
 # dataset_list = ['fashionMnist', 'CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
 dataset_list = ['fashionMnist'] 
 ####################################################### Parameters
 
-
+parallel_processing = True
 @ray.remote
 def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
 
@@ -45,12 +46,12 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
 
     # train normal model or load
     ensemble = []
-    if not os.path.exists(model_path_seed) or Train_new==True:
-        if Train_new==False:
-            os.makedirs(model_path_seed)
-        for i in range(ens_size):
+
+    for i in range(ens_size):
+        model_path = model_path_seed + "_member"  + str(i)
+        if not os.path.exists(model_path) or Train_new==True:
             if Train_new==False:
-                os.makedirs(model_path_seed + "_member"  + str(i))
+                os.makedirs(model_path)
 
             # Create model
             model = tf.keras.models.Sequential()
@@ -76,12 +77,11 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
             
             model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
             model.fit(x_train, y_train, batch_size=128, shuffle=True, epochs=50) # keras.utils.to_categorical(y_train)
-            model.save(model_path_seed + "_member"  + str(i))
+            model.save(model_path)
             ensemble.append(model)
-    else:
-        print("loading model path: ", model_path_seed)
-        for i in range(ens_size):
-            model = tf.keras.models.load_model(model_path_seed + "_member"  + str(i))
+        else:
+            print("loading model path: ", model_path)
+            model = tf.keras.models.load_model(model_path)
             ensemble.append(model)
 
 
@@ -133,9 +133,9 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     ens_x_test_prob_calib = ens_x_test_prob_calib.transpose([1,0,2])
     ens_x_calib_prob = ens_x_calib_prob.transpose([1,0,2])
 
-    ens_x_calib_prob_avg = ens_x_calib_prob.mean(axis=1)
     ens_x_test_prob_avg = ens_x_test_prob.mean(axis=1)
     ens_x_test_prob_memcalib_avg = ens_x_test_prob_calib.mean(axis=1)
+    ens_x_calib_prob_avg = ens_x_calib_prob.mean(axis=1)
 
     # train calibrated for ensemble avg prob
     temp = tf.Variable(initial_value=1.0, trainable=True, dtype=tf.float32)
@@ -153,9 +153,14 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     ens_x_test_prob_avg_enscalib = tf.math.divide(ens_x_test_prob_avg, temp).numpy()
 
 
-    ens_x_test_predict = ens_x_calib_prob_avg.argmax(axis=1)
+    ens_x_test_predict = ens_x_test_prob_avg.argmax(axis=1)
     ens_x_test_predict_memcalib = ens_x_test_prob_memcalib_avg.argmax(axis=1)
     ens_x_test_predict_enscalib = ens_x_test_prob_avg_enscalib.argmax(axis=1)
+
+
+    print("ACC ens          ", accuracy_score(y_test, ens_x_test_predict))
+    print("ACC ens_memcalib ", accuracy_score(y_test, ens_x_test_predict_memcalib))
+    print("ACC enscalib     ", accuracy_score(y_test, ens_x_test_predict_enscalib))
 
     # unc Q
     tu, eu, au = uncM.uncertainty_ent_bays(ens_x_test_prob, np.ones(ens_size))
@@ -165,16 +170,16 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     tuc = unc.calib_ens_total_uncertainty(ens_x_test_prob_avg_enscalib)
 
 
-    # # acc-rej
-    # # ens
+    # acc-rej
+    # ens
     tu_auroc = uncM.unc_auroc(ens_x_test_predict, y_test, tu)
     eu_auroc = uncM.unc_auroc(ens_x_test_predict, y_test, eu)
     au_auroc = uncM.unc_auroc(ens_x_test_predict, y_test, au)
-    # # ens member calib
+    # ens member calib
     tumc_auroc = uncM.unc_auroc(ens_x_test_predict_memcalib, y_test, tumc) # ens_x_test_predict_memcalib might change after calibration
     eumc_auroc = uncM.unc_auroc(ens_x_test_predict_memcalib, y_test, eumc)
     aumc_auroc = uncM.unc_auroc(ens_x_test_predict_memcalib, y_test, aumc)
-    # # ens calib
+    # ens calib
     tuc_auroc = uncM.unc_auroc(ens_x_test_predict_enscalib, y_test, tuc)
 
 
@@ -190,11 +195,16 @@ for dataset in dataset_list:
     features, target = dp.load_data(dataset)
     model_path = f"Models/NN_{dataset}"
     ray_array = []
-    for seed in range(runs): # 10 
-        ray_array.append(calib_ale_test.remote(ens_size, dataset, features, target, model_path, seed))
-        # calib_ale_test(ens_size, dataset, features, target, model_path, seed)
+    for seed in range(runs): 
+        if parallel_processing:
+            ray_array.append(calib_ale_test.remote(ens_size, dataset, features, target, model_path, seed))
+        else:
+            ray_array.append(calib_ale_test(ens_size, dataset, features, target, model_path, seed))
 
-    res_array = np.array(ray.get(ray_array)).mean(axis=0)
+    if parallel_processing:
+        res_array = np.array(ray.get(ray_array)).mean(axis=0)
+    else:
+        res_array = np.array(ray_array).mean(axis=0)
 
     res_txt = f"dataset {dataset}\n"
     res_txt += f"------------------------------------acc-rej\n"

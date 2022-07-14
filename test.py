@@ -1,39 +1,48 @@
-import tensorflow as tf
-# import matplotlib.pyplot as plt
+from sklearn.datasets import load_iris
+from sklearn.naive_bayes import GaussianNB
+from sklearn.metrics import log_loss
+from dirichletcal.calib.fulldirichlet import FullDirichletCalibrator
+from sklearn.model_selection import (train_test_split,
+                                     StratifiedKFold,
+                                     GridSearchCV,
+                                     cross_val_score)
 
-# Load the data
-cifar10 = tf.keras.datasets.cifar10
-(x_train, y_train), (x_test, y_test) = cifar10.load_data()
 
-# Check that it's actuall images
-# plt.imshow(x_train[0], cmap=plt.cm.binary)
+dataset = load_iris()
+x = dataset['data']
+y = dataset['target']
+x_train, x_test, y_train, y_test = train_test_split(x, y, random_state=1,
+                                                    test_size=0.3)
+skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=0)
 
-# Normalize data
-x_train = tf.keras.utils.normalize(x_train, axis=1)
-x_test = tf.keras.utils.normalize(x_test, axis=1)
+classifier = GaussianNB()
+print('Training a classifier with cross-validation')
+scores = cross_val_score(classifier, x_train, y_train, cv=skf,
+                         scoring='neg_log_loss')
+print('Crossval scores: {}'.format(scores))
+print('Average neg log loss {:.3f}'.format(scores.mean()))
+classifier.fit(x_train, y_train)
 
-# Create model
-model = tf.keras.models.Sequential()
+cla_scores_train = classifier.predict_proba(x_train)
+reg = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
+# Full Dirichlet
+calibrator = FullDirichletCalibrator(reg_lambda=reg[0], reg_mu=None)
+# ODIR Dirichlet
+#calibrator = FullDirichletCalibrator(reg_lambda=reg, reg_mu=reg)
+# gscv = GridSearchCV(calibrator, param_grid={'reg_lambda':  reg,
+#                                             'reg_mu': [None]},
+#                     cv=skf, scoring='neg_log_loss')
+# gscv.fit(cla_scores_train, y_train)
 
-# Add layers
-model.add(tf.keras.layers.Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(32, 32, 3)))
-model.add(tf.keras.layers.Conv2D(64, kernel_size=(3, 3), activation='relu'))
-model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-model.add(tf.keras.layers.Dropout(0.25))
+calibrator.fit(cla_scores_train, y_train)
 
-# Layer
-model.add(tf.keras.layers.Conv2D(128, kernel_size=(3, 3), activation='relu'))
-model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-model.add(tf.keras.layers.Conv2D(128, kernel_size=(3, 3), activation='relu'))
-model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-model.add(tf.keras.layers.Dropout(0.25))
+# print('Grid of parameters cross-validated')
+# print(gscv.param_grid)
+# print('Best parameters: {}'.format(gscv.best_params_))
 
-# Layer
-model.add(tf.keras.layers.Flatten())
-model.add(tf.keras.layers.Dense(1024, activation='relu'))
-model.add(tf.keras.layers.Dropout(0.5))
-model.add(tf.keras.layers.Dense(10, activation='softmax'))
-    
-# Train the model
-model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-model.fit(x_train, y_train, batch_size=128, shuffle=True, epochs=100)
+cla_scores_test = classifier.predict_proba(x_test)
+cal_scores_test = calibrator.predict_proba(cla_scores_test)
+cla_loss = log_loss(y_test, cla_scores_test)
+cal_loss = log_loss(y_test, cal_scores_test)
+print("TEST log-loss: Classifier {:.2f}, calibrator {:.2f}".format(
+    cla_loss, cal_loss))
