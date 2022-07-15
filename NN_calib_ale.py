@@ -20,15 +20,16 @@ from temp_scaling import TempCalibrator
 ####################################################### Parameters
 log_ECE = False
 Train_new = False
-runs = 1
+runs = 10
 ens_size = 10
-run_name = "Results/Ale NNConv"
+calibration_method = "Dir" # "temp"
+run_name = "Results/Ale NNConv calib_Dir"
 # dataset_list = ['fashionMnist', 'CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
 dataset_list = ['fashionMnist'] 
 ####################################################### Parameters
 
-parallel_processing = False
-# @ray.remote
+parallel_processing = True
+@ray.remote
 def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
 
     # reshape the data to have proper images for CIFAR10
@@ -100,8 +101,11 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
         prob_x_calib = ensemble[i].predict(x_calib)
         ens_x_calib_prob.append(prob_x_calib)
 
-        # train calibrated model: Temperature Scaling
-        calib_model = TempCalibrator()
+        # train calibrated model
+        if calibration_method == "temp":
+            calib_model = TempCalibrator()
+        elif calibration_method == "Dir":
+            calib_model = FullDirichletCalibrator(reg_lambda=1e-1, reg_mu=None)
         calib_model.fit(prob_x_calib, y_calib)
         prob_x_test_calib = calib_model.predict_proba(prob_x_test)
 
@@ -131,7 +135,10 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     ens_x_calib_prob_avg = ens_x_calib_prob.mean(axis=1)
 
     # train calibrated for ensemble avg prob
-    calib_model = TempCalibrator()
+    if calibration_method == "temp":
+        calib_model = TempCalibrator()
+    elif calibration_method == "Dir":
+        calib_model = FullDirichletCalibrator(reg_lambda=1e-1, reg_mu=None)
     calib_model.fit(ens_x_calib_prob_avg, y_calib)
     ens_x_test_prob_avg_enscalib = calib_model.predict_proba(ens_x_test_prob_avg)
 
