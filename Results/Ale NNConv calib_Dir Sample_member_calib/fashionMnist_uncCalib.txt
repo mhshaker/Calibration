@@ -1,0 +1,12 @@
+dataset fashionMnist
+------------------------------------acc-rej
+Ens 
+91.43 Total uncertainty
+88.30 Epist uncertainty
+91.29 Aleat uncertainty
+MemberCalib 
+89.45 Total uncertainty
+79.14 Epist uncertainty
+89.58 Aleat uncertainty
+EnsCalib 
+88.30 Total uncertainty

@@ -16,16 +16,17 @@ import ray
 from sklearn.metrics import accuracy_score
 from dirichletcal.calib.fulldirichlet import FullDirichletCalibrator
 from temp_scaling import TempCalibrator
+from sklearn.utils import resample
 
 ####################################################### Parameters
 log_ECE = False
 Train_new = False
 runs = 10
 ens_size = 10
-calibration_method = "Dir" # "temp"
-run_name = "Results/Ale NNConv calib_Dir"
+calibration_method = "temp" # "Dir" # 
+run_name = "Results/Ale NNConv calib_temp" # Sample_member_calib
 # dataset_list = ['fashionMnist', 'CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
-dataset_list = ['fashionMnist'] 
+dataset_list = ['CIFAR100'] 
 ####################################################### Parameters
 
 parallel_processing = True
@@ -101,11 +102,15 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
         prob_x_calib = ensemble[i].predict(x_calib)
         ens_x_calib_prob.append(prob_x_calib)
 
-        # train calibrated model
+        # train calibrated model for each member of ens
         if calibration_method == "temp":
             calib_model = TempCalibrator()
         elif calibration_method == "Dir":
             calib_model = FullDirichletCalibrator(reg_lambda=1e-1, reg_mu=None)
+        
+        # sample from the prob_x_calib so that all the members are not calibrated with the same data
+        # sample_prob_x_calib, sample_y_calib = resample(prob_x_calib, y_calib, n_samples=int(len(y_calib)/3), random_state=i)
+        # calib_model.fit(sample_prob_x_calib, sample_y_calib)
         calib_model.fit(prob_x_calib, y_calib)
         prob_x_test_calib = calib_model.predict_proba(prob_x_test)
 
@@ -147,10 +152,10 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     ens_x_test_predict_memcalib = ens_x_test_prob_memcalib_avg.argmax(axis=1)
     ens_x_test_predict_enscalib = ens_x_test_prob_avg_enscalib.argmax(axis=1)
 
-
-    print("ACC ens          ", accuracy_score(y_test, ens_x_test_predict))
-    print("ACC ens_memcalib ", accuracy_score(y_test, ens_x_test_predict_memcalib))
-    print("ACC enscalib     ", accuracy_score(y_test, ens_x_test_predict_enscalib))
+    # sanity check of the acc for different models
+    # print("ACC ens          ", accuracy_score(y_test, ens_x_test_predict))
+    # print("ACC ens_memcalib ", accuracy_score(y_test, ens_x_test_predict_memcalib))
+    # print("ACC enscalib     ", accuracy_score(y_test, ens_x_test_predict_enscalib))
 
     # unc Q
     tu, eu, au = uncM.uncertainty_ent_bays(ens_x_test_prob, np.ones(ens_size))
@@ -172,12 +177,7 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     # ens calib
     tuc_auroc = uncM.unc_auroc(ens_x_test_predict_enscalib, y_test, tuc)
 
-
-    # print("total uncertainty normal auc ", tu_auroc)
-    # print("total uncertainty Calib  auc ", tuc_auroc)
-    # exit()
     return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc
-    # return tu_auroc, tuc_auroc
 
 ray.init()
 for dataset in dataset_list:

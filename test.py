@@ -1,48 +1,22 @@
-from sklearn.datasets import load_iris
-from sklearn.naive_bayes import GaussianNB
-from sklearn.metrics import log_loss
-from dirichletcal.calib.fulldirichlet import FullDirichletCalibrator
-from sklearn.model_selection import (train_test_split,
-                                     StratifiedKFold,
-                                     GridSearchCV,
-                                     cross_val_score)
+
+import Data.data_provider as dp
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+
+dataset = "fashionMnist"
+features, target = dp.load_data(dataset)
+x_train, x_test_all, y_train, y_test_all = train_test_split(features, target, test_size=0.4, shuffle=True, random_state=1)
+x_test, x_calib, y_test, y_calib = train_test_split(x_test_all, y_test_all, test_size=0.5, shuffle=True, random_state=1) 
 
 
-dataset = load_iris()
-x = dataset['data']
-y = dataset['target']
-x_train, x_test, y_train, y_test = train_test_split(x, y, random_state=1,
-                                                    test_size=0.3)
-skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=0)
+# train normal model
+model = RandomForestClassifier(max_depth=10, n_estimators=10, random_state=1) # 
+model.fit(x_train, y_train)
+print(model.score(x_test, y_test))
 
-classifier = GaussianNB()
-print('Training a classifier with cross-validation')
-scores = cross_val_score(classifier, x_train, y_train, cv=skf,
-                         scoring='neg_log_loss')
-print('Crossval scores: {}'.format(scores))
-print('Average neg log loss {:.3f}'.format(scores.mean()))
-classifier.fit(x_train, y_train)
+model.fit(x_calib, y_calib)
+print(model.score(x_test, y_test))
 
-cla_scores_train = classifier.predict_proba(x_train)
-reg = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
-# Full Dirichlet
-calibrator = FullDirichletCalibrator(reg_lambda=reg[0], reg_mu=None)
-# ODIR Dirichlet
-#calibrator = FullDirichletCalibrator(reg_lambda=reg, reg_mu=reg)
-# gscv = GridSearchCV(calibrator, param_grid={'reg_lambda':  reg,
-#                                             'reg_mu': [None]},
-#                     cv=skf, scoring='neg_log_loss')
-# gscv.fit(cla_scores_train, y_train)
-
-calibrator.fit(cla_scores_train, y_train)
-
-# print('Grid of parameters cross-validated')
-# print(gscv.param_grid)
-# print('Best parameters: {}'.format(gscv.best_params_))
-
-cla_scores_test = classifier.predict_proba(x_test)
-cal_scores_test = calibrator.predict_proba(cla_scores_test)
-cla_loss = log_loss(y_test, cla_scores_test)
-cal_loss = log_loss(y_test, cal_scores_test)
-print("TEST log-loss: Classifier {:.2f}, calibrator {:.2f}".format(
-    cla_loss, cal_loss))
+model2 = RandomForestClassifier(max_depth=10, n_estimators=10, random_state=1) # 
+model2.fit(x_calib, y_calib)
+print(model2.score(x_test, y_test))
