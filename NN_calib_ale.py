@@ -23,10 +23,10 @@ log_ECE = False
 Train_new = False
 runs = 10
 ens_size = 10
-calibration_method = "temp" # "Dir" # 
-run_name = "Results/Ale NNConv calib_temp" # Sample_member_calib
-# dataset_list = ['fashionMnist', 'CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
-dataset_list = ['fashionMnist'] 
+calibration_method = "Dir" # "Dir" # temp
+run_name = "Results/Ale NNConv calib_Dir" # Sample_member_calib
+dataset_list = ['CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
+# dataset_list = ['fashionMnist'] 
 ####################################################### Parameters
 
 parallel_processing = True
