@@ -26,7 +26,7 @@ ens_size = 10
 calibration_method = "temp" # "Dir" # 
 run_name = "Results/Ale NNConv calib_temp" # Sample_member_calib
 # dataset_list = ['fashionMnist', 'CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
-dataset_list = ['CIFAR100'] 
+dataset_list = ['fashionMnist'] 
 ####################################################### Parameters
 
 parallel_processing = True
@@ -109,9 +109,12 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
             calib_model = FullDirichletCalibrator(reg_lambda=1e-1, reg_mu=None)
         
         # sample from the prob_x_calib so that all the members are not calibrated with the same data
+
         # sample_prob_x_calib, sample_y_calib = resample(prob_x_calib, y_calib, n_samples=int(len(y_calib)/3), random_state=i)
         # calib_model.fit(sample_prob_x_calib, sample_y_calib)
+
         calib_model.fit(prob_x_calib, y_calib)
+        
         prob_x_test_calib = calib_model.predict_proba(prob_x_test)
 
         ens_x_test_prob_calib.append(prob_x_test_calib)
