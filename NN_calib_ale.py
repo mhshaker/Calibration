@@ -17,16 +17,21 @@ from sklearn.metrics import accuracy_score
 from dirichletcal.calib.fulldirichlet import FullDirichletCalibrator
 from temp_scaling import TempCalibrator
 from sklearn.utils import resample
+from sklearn.metrics import log_loss
+from sklearn.model_selection import StratifiedKFold, GridSearchCV
+
+tf.keras.utils.disable_interactive_logging()
 
 ####################################################### Parameters
 log_ECE = False
+log_AUARC = False
 Train_new = False
 runs = 10
 ens_size = 10
 calibration_method = "Dir" # "Dir" # temp
-run_name = "Results/Ale NNConv calib_Dir" # Sample_member_calib
-dataset_list = ['CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
-# dataset_list = ['fashionMnist'] 
+run_name = "Results/Ale NNConv calib_Dir gridCV" # Sample_member_calib
+dataset_list = ['fashionMnist','CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
+# dataset_list = ['CIFAR10'] 
 ####################################################### Parameters
 
 parallel_processing = True
@@ -94,7 +99,6 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     ens_x_calib_prob = []
     
     for i in range(ens_size): 
-        # print(f"member {i} Eval ", ensemble[i].evaluate(x_test, y_test))
 
         prob_x_test = ensemble[i].predict(x_test)
         ens_x_test_prob.append(prob_x_test)
@@ -106,8 +110,14 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
         if calibration_method == "temp":
             calib_model = TempCalibrator()
         elif calibration_method == "Dir":
-            calib_model = FullDirichletCalibrator(reg_lambda=1e-1, reg_mu=None)
-        
+            # calib_model = FullDirichletCalibrator(reg_lambda=1e-1, reg_mu=None)
+
+            skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=0)
+            reg = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
+            # Full Dirichlet
+            calibrator = FullDirichletCalibrator(reg_lambda=reg, reg_mu=None)
+            calib_model = GridSearchCV(calibrator, param_grid={'reg_lambda':  reg, 'reg_mu': [None]}, cv=skf, scoring='neg_log_loss')
+
         # sample from the prob_x_calib so that all the members are not calibrated with the same data
 
         # sample_prob_x_calib, sample_y_calib = resample(prob_x_calib, y_calib, n_samples=int(len(y_calib)/3), random_state=i)
@@ -121,6 +131,7 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
 
         # ECE result before calibration (TF code)
         if log_ECE:
+            print(f"member {i} Eval ", ensemble[i].evaluate(x_test, y_test))
             num_bins = 20
             labels_true = tf.convert_to_tensor(y_test, dtype=tf.int32, name='labels_true')
             logits = tf.convert_to_tensor(prob_x_test, dtype=tf.float32, name='logits')
@@ -128,6 +139,10 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
             # ECE result after calibration
             logits = tf.convert_to_tensor(prob_x_test_calib, dtype=tf.float32, name='logits')
             print("Calib ECE : ", tfp.stats.expected_calibration_error(num_bins=num_bins, logits=logits, labels_true=labels_true))
+            print("normal_loss ", log_loss(y_test, prob_x_test))
+            print("calib_loss ", log_loss(y_test, prob_x_test_calib))
+
+            print("------------------------------------")
 
     # convert ens probs to np and transpose the dimentions for uncQ
     ens_x_test_prob = np.array(ens_x_test_prob)
@@ -146,7 +161,13 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     if calibration_method == "temp":
         calib_model = TempCalibrator()
     elif calibration_method == "Dir":
-        calib_model = FullDirichletCalibrator(reg_lambda=1e-1, reg_mu=None)
+        # calib_model = FullDirichletCalibrator(reg_lambda=1e-1, reg_mu=None)
+        skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=0)
+        reg = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
+        # Full Dirichlet
+        calibrator = FullDirichletCalibrator(reg_lambda=reg, reg_mu=None)
+        calib_model = GridSearchCV(calibrator, param_grid={'reg_lambda':  reg, 'reg_mu': [None]}, cv=skf, scoring='neg_log_loss')
+
     calib_model.fit(ens_x_calib_prob_avg, y_calib)
     ens_x_test_prob_avg_enscalib = calib_model.predict_proba(ens_x_test_prob_avg)
 
@@ -180,6 +201,9 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     # ens calib
     tuc_auroc = uncM.unc_auroc(ens_x_test_predict_enscalib, y_test, tuc)
 
+    if log_AUARC:
+        print(tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc)
+    # exit()
     return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc
 
 ray.init()

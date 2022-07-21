@@ -7,12 +7,14 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.calibration import CalibratedClassifierCV
 import ray
+from sklearn.metrics import log_loss
 
-dataset_list = ['fashionMnist', 'CIFAR10', 'CIFAR100'] # 'fashionMnist', 'amazon_movie'
+dataset_list = ['CIFAR10'] # 'fashionMnist', 'amazon_movie'
 run_name = "Results/Ale calib_cv_fix"
+log_ECE = True
+log_AUARC = True
 
-
-@ray.remote
+# @ray.remote
 def calib_ale_test(features, target, seed):
     # seperate to train test calibration
     x_train, x_test_all, y_train, y_test_all = train_test_split(features, target, test_size=0.4, shuffle=True, random_state=seed)
@@ -22,14 +24,19 @@ def calib_ale_test(features, target, seed):
     model = RandomForestClassifier(max_depth=10, n_estimators=10, random_state=seed) # 
     model.fit(x_train, y_train)
     predictions_x_test = model.predict(x_test)
+    prob_x_test = model.predict_proba(x_test)
     
     # train calibrated model
     calib_method = "isotonic" # "sigmoid" # 
     model_calib = CalibratedClassifierCV(model, cv="prefit", method=calib_method) # cv=30
     model_calib.fit(x_calib , y_calib)
 
-
     prob_x_test_calib = model_calib.predict_proba(x_test)
+
+    if log_ECE:
+        print("normal_loss ", log_loss(y_test, prob_x_test))
+        print("calib_loss ", log_loss(y_test, prob_x_test_calib))
+
 
     # unc Q id
     tu, eu, au = unc.model_uncertainty(model, x_test, x_train, y_train)
@@ -48,6 +55,10 @@ def calib_ale_test(features, target, seed):
     # ens calib
     tuc_auroc = uncM.unc_auroc(predictions_x_test, y_test, tuc)
 
+    if log_AUARC:
+        print(tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc)
+    exit()
+
     return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc
 
 ray.init()
@@ -57,7 +68,8 @@ for dataset in dataset_list:
 
     ray_array = []
     for seed in range(10):
-        ray_array.append(calib_ale_test.remote(features, target, seed))
+        # ray_array.append(calib_ale_test.remote(features, target, seed))
+        ray_array.append(calib_ale_test(features, target, seed))
 
     res_array = np.array(ray.get(ray_array)).mean(axis=0)
 
