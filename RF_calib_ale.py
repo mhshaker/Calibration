@@ -8,7 +8,10 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.calibration import CalibratedClassifierCV
 import ray
 from sklearn.metrics import log_loss
+from sklearn.model_selection import StratifiedKFold, GridSearchCV
+from dirichletcal.calib.fulldirichlet import FullDirichletCalibrator
 
+calibration_method = "Dir" # isotonic "sigmoid"
 dataset_list = ['CIFAR10'] # 'fashionMnist', 'amazon_movie'
 run_name = "Results/Ale calib_cv_fix"
 log_ECE = True
@@ -25,22 +28,31 @@ def calib_ale_test(features, target, seed):
     model.fit(x_train, y_train)
     predictions_x_test = model.predict(x_test)
     prob_x_test = model.predict_proba(x_test)
+    prob_x_calib = model.predict_proba(x_calib)
     
     # train calibrated model
-    calib_method = "isotonic" # "sigmoid" # 
-    model_calib = CalibratedClassifierCV(model, cv="prefit", method=calib_method) # cv=30
-    model_calib.fit(x_calib , y_calib)
-
-    prob_x_test_calib = model_calib.predict_proba(x_test)
+    if calibration_method == "isotonic" or calibration_method == "sigmoid":
+        model_calib = CalibratedClassifierCV(model, cv="prefit", method=calibration_method) # cv=30
+        model_calib.fit(x_calib , y_calib)
+        prob_x_test_calib = model_calib.predict_proba(x_test)
+    elif calibration_method == "Dir":
+        # calib_model = FullDirichletCalibrator(reg_lambda=1e-1, reg_mu=None)
+        skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=0)
+        reg = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
+        # Full Dirichlet
+        calibrator = FullDirichletCalibrator(reg_lambda=reg, reg_mu=None)
+        model_calib = GridSearchCV(calibrator, param_grid={'reg_lambda':  reg, 'reg_mu': [None]}, cv=skf, scoring='neg_log_loss')
+        model_calib.fit(prob_x_calib , y_calib)
+        prob_x_test_calib = model_calib.predict_proba(prob_x_test)
 
     if log_ECE:
-        print("normal_loss ", log_loss(y_test, prob_x_test))
-        print("calib_loss ", log_loss(y_test, prob_x_test_calib))
+        print("ens_loss ", log_loss(y_test, prob_x_test))
+        print("enscalib_loss ", log_loss(y_test, prob_x_test_calib))
 
 
     # unc Q id
     tu, eu, au = unc.model_uncertainty(model, x_test, x_train, y_train)
-    tumc, eumc, aumc = unc.calib_ens_member_uncertainty(model, x_test, x_train, y_train, x_calib, y_calib, calib_method)
+    tumc, eumc, aumc = unc.calib_ens_member_uncertainty(model, x_test, x_train, y_train, x_calib, y_calib, calibration_method)
     tuc = unc.calib_ens_total_uncertainty(prob_x_test_calib)
 
     # acc-rej

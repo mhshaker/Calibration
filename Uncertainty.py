@@ -4,6 +4,8 @@ from sklearn.metrics import log_loss
 from scipy.stats import entropy
 from sklearn.calibration import CalibratedClassifierCV, CalibrationDisplay
 from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedKFold, GridSearchCV
+from dirichletcal.calib.fulldirichlet import FullDirichletCalibrator
 
 def model_uncertainty(model, x_test, x_train, y_train, unc_method="bays", laplace_smoothing=1, log=False):
     
@@ -71,13 +73,21 @@ def get_member_calib_prob(model_ens, x_data, X_calib, y_calib, calib_method="iso
     prob_matrix  = []
 
     for estimator in model_ens.estimators_:
-        model_calib = CalibratedClassifierCV(estimator, cv="prefit", method=calib_method) # cv=30
-        # model_calib = LogisticRegression(C=99999999999)
-        # tree_prob_x_calib = estimator.predict_proba(X_calib)
-        model_calib.fit(X_calib, y_calib)
+        if calib_method == "isotonic" or calib_method == "sigmoid":
+            model_calib = CalibratedClassifierCV(estimator, cv="prefit", method=calib_method) # cv=30
+            model_calib.fit(X_calib, y_calib)
+            tree_prob_x_test_calib = model_calib.predict_proba(x_data)
 
-        # tree_prob_x_test = estimator.predict_proba(x_data)
-        tree_prob_x_test_calib = model_calib.predict_proba(x_data)
+        elif calib_method == "Dir":
+            # calib_model = FullDirichletCalibrator(reg_lambda=1e-1, reg_mu=None)
+            skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=0)
+            reg = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
+            # Full Dirichlet
+            calibrator = FullDirichletCalibrator(reg_lambda=reg, reg_mu=None)
+            model_calib = GridSearchCV(calibrator, param_grid={'reg_lambda':  reg, 'reg_mu': [None]}, cv=skf, scoring='neg_log_loss')
+            model_calib.fit(estimator.predict_proba(X_calib) , y_calib)
+            tree_prob_x_test_calib = model_calib.predict_proba(estimator.predict_proba(x_data))
+
         prob_matrix.append(tree_prob_x_test_calib)
     prob_matrix = np.array(prob_matrix)
     prob_matrix = prob_matrix.transpose([1,0,2]) # D1 = data index D2= ens tree index D3= prediction prob for classes
