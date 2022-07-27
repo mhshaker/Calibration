@@ -1,0 +1,12 @@
+dataset spambase - temp
+------------------------------------acc-rej
+Ens 
+86.96 Total uncertainty
+80.40 Epist uncertainty
+84.37 Aleat uncertainty
+MemberCalib 
+86.19 Total uncertainty
+81.37 Epist uncertainty
+77.67 Aleat uncertainty
+EnsCalib 
+86.57 Total uncertainty

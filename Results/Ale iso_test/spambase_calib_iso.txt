@@ -1,0 +1,12 @@
+dataset spambase  - calib: iso
+------------------------------------acc-rej
+Ens 
+86.96 Total uncertainty
+80.40 Epist uncertainty
+84.37 Aleat uncertainty
+MemberCalib 
+50.00 Total uncertainty
+50.00 Epist uncertainty
+50.00 Aleat uncertainty
+EnsCalib 
+50.09 Total uncertainty

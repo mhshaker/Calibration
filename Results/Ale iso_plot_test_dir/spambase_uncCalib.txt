@@ -1,0 +1,12 @@
+dataset spambase - Dir
+------------------------------------acc-rej
+Ens 
+86.96 Total uncertainty
+80.40 Epist uncertainty
+84.37 Aleat uncertainty
+MemberCalib 
+87.19 Total uncertainty
+70.11 Epist uncertainty
+71.36 Aleat uncertainty
+EnsCalib 
+85.79 Total uncertainty

@@ -10,14 +10,18 @@ import ray
 from sklearn.metrics import log_loss
 from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from dirichletcal.calib.fulldirichlet import FullDirichletCalibrator
+import matplotlib.pyplot as plt
+from sklearn.isotonic import IsotonicRegression
+# from calmap import plot_calibration_map
 
-calibration_method = "Dir" # isotonic "sigmoid"
-dataset_list = ['CIFAR10'] # 'fashionMnist', 'amazon_movie'
-run_name = "Results/Ale calib_cv_fix"
-log_ECE = True
-log_AUARC = True
+calibration_method = "iso" # isotonic "sigmoid"
+dataset_list = ['spambase'] # 'fashionMnist', 'amazon_movie'
+run_name = "Results/Ale RF iso_test"
+log_ECE = False
+log_AUARC = False
+log_iso = True
 
-# @ray.remote
+@ray.remote
 def calib_ale_test(features, target, seed):
     # seperate to train test calibration
     x_train, x_test_all, y_train, y_test_all = train_test_split(features, target, test_size=0.4, shuffle=True, random_state=seed)
@@ -35,6 +39,57 @@ def calib_ale_test(features, target, seed):
         model_calib = CalibratedClassifierCV(model, cv="prefit", method=calibration_method) # cv=30
         model_calib.fit(x_calib , y_calib)
         prob_x_test_calib = model_calib.predict_proba(x_test)
+    elif calibration_method =="iso":
+        iso = IsotonicRegression()
+        iso_x_calib = prob_x_calib[:,1]
+
+        # sorted_index = np.argsort(iso_x_calib, kind='stable')
+        # iso_x_calib = iso_x_calib[sorted_index]
+        # x_calib = x_calib[sorted_index]
+        # y_calib = y_calib[sorted_index]
+        # prob_x_calib = prob_x_calib[sorted_index]
+
+        iso.fit(iso_x_calib, y_calib)
+        # y_ = iso.fit_transform(iso_x_calib, y_calib)
+
+        
+
+        prob_x_test_calib = iso.predict(prob_x_test[:,1])
+        prob_x_test_calib = np.nan_to_num(prob_x_test_calib) # remove NAN values
+        second_class_prob = np.ones(len(prob_x_test_calib)) - prob_x_test_calib
+        prob_x_test_calib = np.concatenate((prob_x_test_calib.reshape(-1,1), second_class_prob.reshape(-1,1)), axis=1)
+
+        if log_iso:
+
+            linspace = np.linspace(0, 1, len(x_calib))
+            pr = iso.predict(linspace)
+            idx = iso_x_calib.argsort()
+            scores = iso_x_calib[idx]
+            plt.plot(pr, scores)
+            plt.plot([0,1], [0,1], ':', c="black")
+            plt.title(f"Isotonic regression fit on x_calib - seed {seed}")
+            plt.xlabel('score')
+            plt.ylabel('prediction')
+            plt.savefig(f"Step_results/iso_plot_test{seed}.png")
+            plt.close()
+
+
+            # fig, (ax0, ax1) = plt.subplots(ncols=2, figsize=(12, 6))
+
+            # ax0.plot(iso_x_calib, y_calib, "C0.", markersize=12)
+            # ax0.plot(iso_x_calib, y_, "C1.-", markersize=12)
+            # ax0.legend(("Training data", "Isotonic fit", "Linear fit"), loc="lower right")
+            # ax0.set_title("Isotonic regression fit on noisy data (n=%d)" % len(x_calib))
+
+            # ax1.plot(prob_x_test[:,0], prob_x_test_calib, "C1-")
+            # ax1.plot(iso.X_thresholds_, iso.y_thresholds_, "C1.", markersize=12)
+            # ax1.set_title("Prediction function (%d thresholds)" % len(iso.X_thresholds_))
+
+            # plt.savefig(f"Step_results/iso_plot_test{seed}.png")
+            # plt.close()
+            # exit()
+
+
     elif calibration_method == "Dir":
         # calib_model = FullDirichletCalibrator(reg_lambda=1e-1, reg_mu=None)
         skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=0)
@@ -69,7 +124,7 @@ def calib_ale_test(features, target, seed):
 
     if log_AUARC:
         print(tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc)
-    exit()
+    # exit()
 
     return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc
 
@@ -80,12 +135,12 @@ for dataset in dataset_list:
 
     ray_array = []
     for seed in range(10):
-        # ray_array.append(calib_ale_test.remote(features, target, seed))
-        ray_array.append(calib_ale_test(features, target, seed))
+        ray_array.append(calib_ale_test.remote(features, target, seed))
+        # ray_array.append(calib_ale_test(features, target, seed))
 
     res_array = np.array(ray.get(ray_array)).mean(axis=0)
 
-    res_txt = f"dataset {dataset}\n"
+    res_txt = f"dataset {dataset}  - calib: {calibration_method}\n"
     res_txt += f"------------------------------------acc-rej\n"
     res_txt += "Ens \n"
     res_txt += f"{res_array[0]* 100:.2f} Total uncertainty\n"
@@ -101,6 +156,6 @@ for dataset in dataset_list:
     if not os.path.exists(run_name):
         os.makedirs(run_name)
 
-    with open(f"{run_name}/{dataset}_uncCalib.txt", "w") as text_file:
+    with open(f"{run_name}/{dataset}_calib_{calibration_method}.txt", "w") as text_file:
         text_file.write(res_txt)
     print(f"{dataset} done")

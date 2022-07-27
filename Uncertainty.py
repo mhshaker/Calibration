@@ -6,6 +6,7 @@ from sklearn.calibration import CalibratedClassifierCV, CalibrationDisplay
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from dirichletcal.calib.fulldirichlet import FullDirichletCalibrator
+from sklearn.isotonic import IsotonicRegression
 
 def model_uncertainty(model, x_test, x_train, y_train, unc_method="bays", laplace_smoothing=1, log=False):
     
@@ -77,6 +78,13 @@ def get_member_calib_prob(model_ens, x_data, X_calib, y_calib, calib_method="iso
             model_calib = CalibratedClassifierCV(estimator, cv="prefit", method=calib_method) # cv=30
             model_calib.fit(X_calib, y_calib)
             tree_prob_x_test_calib = model_calib.predict_proba(x_data)
+        elif calib_method =="iso":
+            iso = IsotonicRegression()
+            iso.fit(estimator.predict_proba(X_calib)[:,0], y_calib)
+            tree_prob_x_test_calib = iso.predict(estimator.predict_proba(x_data)[:,0])
+            tree_prob_x_test_calib = np.nan_to_num(tree_prob_x_test_calib) # remove NAN values
+            second_class_prob = np.ones(len(tree_prob_x_test_calib)) - tree_prob_x_test_calib
+            tree_prob_x_test_calib = np.concatenate((tree_prob_x_test_calib.reshape(-1,1), second_class_prob.reshape(-1,1)), axis=1)
 
         elif calib_method == "Dir":
             # calib_model = FullDirichletCalibrator(reg_lambda=1e-1, reg_mu=None)
