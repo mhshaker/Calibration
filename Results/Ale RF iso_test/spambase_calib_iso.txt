@@ -9,4 +9,4 @@ MemberCalib
 50.00 Epist uncertainty
 50.00 Aleat uncertainty
 EnsCalib 
-86.57 Total uncertainty
+85.79 Total uncertainty

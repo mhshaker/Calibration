@@ -1,7 +1,5 @@
-import numpy as np
+x = [1,2,3]
 
+y = sum(x)
 
-x = np.array([1,2,np.NaN, 0])
-y = np.nan_to_num(x)
-print(x)
 print(y)

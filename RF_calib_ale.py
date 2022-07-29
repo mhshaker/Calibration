@@ -12,93 +12,116 @@ from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from dirichletcal.calib.fulldirichlet import FullDirichletCalibrator
 import matplotlib.pyplot as plt
 from sklearn.isotonic import IsotonicRegression
+import CalibrationM as calibm
+
 # from calmap import plot_calibration_map
 
 calibration_method = "iso" # isotonic "sigmoid"
-dataset_list = ['spambase'] # 'fashionMnist', 'amazon_movie'
+dataset_list = ['fashionMnist'] # 'fashionMnist', 'amazon_movie'
 run_name = "Results/Ale RF iso_test"
 log_ECE = False
 log_AUARC = False
-log_iso = True
+plot_calib = True
+all_methods_comp = True
 
-@ray.remote
+# @ray.remote
 def calib_ale_test(features, target, seed):
     # seperate to train test calibration
     x_train, x_test_all, y_train, y_test_all = train_test_split(features, target, test_size=0.4, shuffle=True, random_state=seed)
     x_test, x_calib, y_test, y_calib = train_test_split(x_test_all, y_test_all, test_size=0.5, shuffle=True, random_state=seed) 
     
     # train normal model
-    model = RandomForestClassifier(max_depth=10, n_estimators=10, random_state=seed) # 
+    model = RandomForestClassifier(max_depth=10, n_estimators=10, random_state=seed)
     model.fit(x_train, y_train)
     predictions_x_test = model.predict(x_test)
     prob_x_test = model.predict_proba(x_test)
     prob_x_calib = model.predict_proba(x_calib)
     
+    print("normal cw_ece = ", calibm.classwise_ECE(prob_x_test, y_test))
+
     # train calibrated model
-    if calibration_method == "isotonic" or calibration_method == "sigmoid":
-        model_calib = CalibratedClassifierCV(model, cv="prefit", method=calibration_method) # cv=30
+    if calibration_method == "isotonic" or calibration_method == "sigmoid" or all_methods_comp:
+        model_calib = CalibratedClassifierCV(model, cv="prefit", method="isotonic") # cv=30
         model_calib.fit(x_calib , y_calib)
         prob_x_test_calib = model_calib.predict_proba(x_test)
-    elif calibration_method =="iso":
-        iso = IsotonicRegression()
-        iso_x_calib = prob_x_calib[:,1]
+        if plot_calib:
+            # sk_prob_x_calib_calibrated = model_calib.predict_proba(x_calib)[:,1]
+            pr = prob_x_test_calib
+            prob_x_calib_sk = prob_x_calib[:,1]
+            prob_x_calib_sk = prob_x_calib_sk[0:-1]
 
-        # sorted_index = np.argsort(iso_x_calib, kind='stable')
-        # iso_x_calib = iso_x_calib[sorted_index]
-        # x_calib = x_calib[sorted_index]
-        # y_calib = y_calib[sorted_index]
-        # prob_x_calib = prob_x_calib[sorted_index]
-
-        iso.fit(iso_x_calib, y_calib)
-        # y_ = iso.fit_transform(iso_x_calib, y_calib)
-
-        
-
-        prob_x_test_calib = iso.predict(prob_x_test[:,1])
-        prob_x_test_calib = np.nan_to_num(prob_x_test_calib) # remove NAN values
-        second_class_prob = np.ones(len(prob_x_test_calib)) - prob_x_test_calib
-        prob_x_test_calib = np.concatenate((prob_x_test_calib.reshape(-1,1), second_class_prob.reshape(-1,1)), axis=1)
-
-        if log_iso:
-
-            linspace = np.linspace(0, 1, len(x_calib))
-            pr = iso.predict(linspace)
-            idx = iso_x_calib.argsort()
-            scores = iso_x_calib[idx]
-            plt.plot(pr, scores)
+            idx = prob_x_calib_sk.argsort()
+            scores = prob_x_calib_sk[idx]
+            pr = pr[idx]
+            plt.plot(pr, scores, label='sk_iso')
             plt.plot([0,1], [0,1], ':', c="black")
             plt.title(f"Isotonic regression fit on x_calib - seed {seed}")
             plt.xlabel('score')
             plt.ylabel('prediction')
-            plt.savefig(f"Step_results/iso_plot_test{seed}.png")
+            plt.legend()
+            plt.savefig(f"Step_results/iso_plot_test{seed}_sk.png")
             plt.close()
+            print("sk_iso cw_ece = ", calibm.classwise_ECE(prob_x_test_calib, y_test))
+            
+        
+    if (calibration_method =="iso" or all_methods_comp) and len(np.unique(y_train)) <= 2:
+        iso_calib = IsotonicRegression()
+        iso_x_calib = prob_x_calib[:,1]
 
+        iso_calib.fit(iso_x_calib, y_calib)
 
-            # fig, (ax0, ax1) = plt.subplots(ncols=2, figsize=(12, 6))
+        prob_x_test_calib = iso_calib.predict(prob_x_test[:,1])
+        prob_x_test_calib = np.nan_to_num(prob_x_test_calib) # remove NAN values
+        second_class_prob = np.ones(len(prob_x_test_calib)) - prob_x_test_calib
+        prob_x_test_calib = np.concatenate((prob_x_test_calib.reshape(-1,1), second_class_prob.reshape(-1,1)), axis=1)
 
-            # ax0.plot(iso_x_calib, y_calib, "C0.", markersize=12)
-            # ax0.plot(iso_x_calib, y_, "C1.-", markersize=12)
-            # ax0.legend(("Training data", "Isotonic fit", "Linear fit"), loc="lower right")
-            # ax0.set_title("Isotonic regression fit on noisy data (n=%d)" % len(x_calib))
-
-            # ax1.plot(prob_x_test[:,0], prob_x_test_calib, "C1-")
-            # ax1.plot(iso.X_thresholds_, iso.y_thresholds_, "C1.", markersize=12)
-            # ax1.set_title("Prediction function (%d thresholds)" % len(iso.X_thresholds_))
-
+        if plot_calib:
+            linspace = np.linspace(0, 1, len(x_calib))
+            pr = iso_calib.predict(linspace)
+            idx = iso_x_calib.argsort()
+            scores = iso_x_calib[idx]
+            plt.plot(pr, scores, label='iso')
+            # plt.plot([0,1], [0,1], ':', c="black")
+            # plt.title(f"Isotonic regression fit on x_calib - seed {seed}")
+            # plt.xlabel('score')
+            # plt.ylabel('prediction')
+            # plt.legend()
             # plt.savefig(f"Step_results/iso_plot_test{seed}.png")
             # plt.close()
-            # exit()
+            print("iso cw_ece = ", calibm.classwise_ECE(prob_x_test_calib, y_test))
 
 
-    elif calibration_method == "Dir":
+
+    if calibration_method == "Dir" or all_methods_comp:
         # calib_model = FullDirichletCalibrator(reg_lambda=1e-1, reg_mu=None)
         skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=0)
         reg = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
         # Full Dirichlet
         calibrator = FullDirichletCalibrator(reg_lambda=reg, reg_mu=None)
-        model_calib = GridSearchCV(calibrator, param_grid={'reg_lambda':  reg, 'reg_mu': [None]}, cv=skf, scoring='neg_log_loss')
-        model_calib.fit(prob_x_calib , y_calib)
-        prob_x_test_calib = model_calib.predict_proba(prob_x_test)
+        dir_calib = GridSearchCV(calibrator, param_grid={'reg_lambda':  reg, 'reg_mu': [None]}, cv=skf, scoring='neg_log_loss')
+        dir_calib.fit(prob_x_calib , y_calib)
+        prob_x_test_calib = dir_calib.predict_proba(prob_x_test)
+        if plot_calib:
+            if len(np.unique(y_train)) <= 2:
+                linspace = np.linspace(0, 1, len(x_calib))
+                second_class_prob_l = np.ones(len(x_calib)) - linspace
+                linspace = np.concatenate((second_class_prob_l.reshape(-1,1), linspace.reshape(-1,1)), axis=1)
+
+                pr = dir_calib.predict_proba(linspace)
+                dir_x_calib = prob_x_calib[:,1]
+                idx = dir_x_calib.argsort()
+                scores = dir_x_calib[idx]
+                plt.plot(pr[:,1], scores, label='Dirichlet')
+                plt.plot([0,1], [0,1], ':', c="black")
+                plt.title(f"Isotonic regression fit on x_calib - seed {seed}")
+                plt.xlabel('score')
+                plt.ylabel('prediction')
+                plt.legend()
+                plt.savefig(f"Step_results/iso_plot_test{seed}.png")
+                plt.close()
+
+            print("dir cw_ece = ", calibm.classwise_ECE(prob_x_test_calib, y_test))
+            exit()
 
     if log_ECE:
         print("ens_loss ", log_loss(y_test, prob_x_test))
@@ -135,8 +158,8 @@ for dataset in dataset_list:
 
     ray_array = []
     for seed in range(10):
-        ray_array.append(calib_ale_test.remote(features, target, seed))
-        # ray_array.append(calib_ale_test(features, target, seed))
+        # ray_array.append(calib_ale_test.remote(features, target, seed))
+        ray_array.append(calib_ale_test(features, target, seed))
 
     res_array = np.array(ray.get(ray_array)).mean(axis=0)
 
