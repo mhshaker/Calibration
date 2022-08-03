@@ -5,7 +5,7 @@ def classwise_ECE(probs, y_true, bins=10, equal_bin_size=True, full_ece=False):
     class_ece = []
 
     for class_index in range(len(np.unique(y_true))):
-
+        ece = 0
         class_prob = probs[:,class_index] # select probs form i th class
         correctness_map = np.where(class_index==y_true, 1, 0) # determine which predictions are correct
 
@@ -17,7 +17,8 @@ def classwise_ECE(probs, y_true, bins=10, equal_bin_size=True, full_ece=False):
                     bin_conf = class_prob[bin_indexes].mean()
                     bin_class_friq = correctness_map[bin_indexes].sum() / len(bin_indexes)
                     dif = abs(bin_conf - bin_class_friq)
-                    class_ece.append(dif * len(bin_indexes) / len(probs))  # difference times the number of instances in the bin divided by the total number of instances in the dataset
+                    ece += dif * len(bin_indexes) / len(probs)
+                class_ece.append(ece)  # difference times the number of instances in the bin divided by the total number of instances in the dataset
         else: # equal_bin_size
             sorted_index = np.argsort(class_prob, kind='stable') # sort probs
             class_prob = class_prob[sorted_index]
@@ -28,7 +29,8 @@ def classwise_ECE(probs, y_true, bins=10, equal_bin_size=True, full_ece=False):
                 bin_conf = class_prob[bin*bin_size:(bin+1)*bin_size].mean()
                 bin_class_friq = correctness_map[bin*bin_size:(bin+1)*bin_size].sum() / bin_size
                 dif = abs(bin_conf - bin_class_friq)
-                class_ece.append(dif * bin_size / len(probs))
+                ece += dif * bin_size / len(probs)
+            class_ece.append(ece)
 
     if full_ece:
         return sum(class_ece)

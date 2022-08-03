@@ -24,7 +24,8 @@ log_AUARC = False
 plot_calib = True
 all_methods_comp = True
 
-# @ray.remote
+
+@ray.remote
 def calib_ale_test(features, target, seed):
     # seperate to train test calibration
     x_train, x_test_all, y_train, y_test_all = train_test_split(features, target, test_size=0.4, shuffle=True, random_state=seed)
@@ -37,7 +38,10 @@ def calib_ale_test(features, target, seed):
     prob_x_test = model.predict_proba(x_test)
     prob_x_calib = model.predict_proba(x_calib)
     
-    print("normal cw_ece = ", calibm.classwise_ECE(prob_x_test, y_test))
+    normal_cw_ece = calibm.classwise_ECE(prob_x_test, y_test)
+
+    print(f"seed {seed} normal cw_ece = ", normal_cw_ece)
+    print(f"seed {seed} normal cw_ece sum ", sum(normal_cw_ece))
 
     # train calibrated model
     if calibration_method == "isotonic" or calibration_method == "sigmoid" or all_methods_comp:
@@ -59,9 +63,12 @@ def calib_ale_test(features, target, seed):
             plt.xlabel('score')
             plt.ylabel('prediction')
             plt.legend()
-            plt.savefig(f"Step_results/iso_plot_test{seed}_sk.png")
+            plt.savefig(f"Step_results/iso_plot_test_run{seed}_sk.png")
             plt.close()
-            print("sk_iso cw_ece = ", calibm.classwise_ECE(prob_x_test_calib, y_test))
+
+            sk_iso_cw_ece = calibm.classwise_ECE(prob_x_test_calib, y_test)
+            print(f"seed {seed} sk_iso cw_ece = ", sk_iso_cw_ece)
+            print(f"seed {seed} sk_iso cw_ece sum ", sum(sk_iso_cw_ece))
             
         
     if (calibration_method =="iso" or all_methods_comp) and len(np.unique(y_train)) <= 2:
@@ -117,11 +124,12 @@ def calib_ale_test(features, target, seed):
                 plt.xlabel('score')
                 plt.ylabel('prediction')
                 plt.legend()
-                plt.savefig(f"Step_results/iso_plot_test{seed}.png")
+                plt.savefig(f"Step_results/iso_plot_test_run{seed}.png")
                 plt.close()
 
-            print("dir cw_ece = ", calibm.classwise_ECE(prob_x_test_calib, y_test))
-            exit()
+            dir_cw_ece = calibm.classwise_ECE(prob_x_test_calib, y_test)
+            print(f"seed {seed} dir cw_ece = ", dir_cw_ece)
+            print(f"seed {seed} dir cw_ece sum ", sum(dir_cw_ece))
 
     if log_ECE:
         print("ens_loss ", log_loss(y_test, prob_x_test))
@@ -149,7 +157,7 @@ def calib_ale_test(features, target, seed):
         print(tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc)
     # exit()
 
-    return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc
+    return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc, normal_cw_ece, sk_iso_cw_ece, dir_cw_ece
 
 ray.init()
 for dataset in dataset_list:
@@ -158,10 +166,18 @@ for dataset in dataset_list:
 
     ray_array = []
     for seed in range(10):
-        # ray_array.append(calib_ale_test.remote(features, target, seed))
-        ray_array.append(calib_ale_test(features, target, seed))
+        ray_array.append(calib_ale_test.remote(features, target, seed))
+        # ray_array.append(calib_ale_test(features, target, seed))
 
-    res_array = np.array(ray.get(ray_array)).mean(axis=0)
+    res_array_all = np.array(ray.get(ray_array))
+    with open('Step_results/res_array_all.npy', 'wb') as f:
+        np.save(f, res_array_all)
+    print("------------------------------------")
+    print("------------------------------------")
+
+
+    res_array = res_array_all[:,0:-3].mean(axis=0)
+    print(res_array)
 
     res_txt = f"dataset {dataset}  - calib: {calibration_method}\n"
     res_txt += f"------------------------------------acc-rej\n"
@@ -182,3 +198,21 @@ for dataset in dataset_list:
     with open(f"{run_name}/{dataset}_calib_{calibration_method}.txt", "w") as text_file:
         text_file.write(res_txt)
     print(f"{dataset} done")
+
+
+    # normal_cw_ece = np.array(res_array_all[:,-3])
+    # sk_iso_cw_ece = np.array(res_array_all[:,-2])
+    # dir_cw_ece    = np.array(res_array_all[:,-1])
+
+    # with open('Step_results/ens_normal_cw_ece.npy', 'wb') as f:
+    #     np.save(f, normal_cw_ece)
+    # with open('Step_results/ens_sk_iso_cw_ece.npy', 'wb') as f:
+    #     np.save(f, sk_iso_cw_ece)
+    # with open('Step_results/ens_dir_cw_ece.npy', 'wb') as f:
+    #     np.save(f, dir_cw_ece)
+
+    # print("------------------------------------")
+
+    # print("normal_cw_ece ", normal_cw_ece.mean(axis=0))
+    # print("sk_iso_cw_ece ", sk_iso_cw_ece.mean(axis=0))
+    # print("dir_cw_ece ", dir_cw_ece.mean(axis=0))
