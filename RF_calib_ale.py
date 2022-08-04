@@ -138,7 +138,7 @@ def calib_ale_test(features, target, seed):
 
     # unc Q id
     tu, eu, au = unc.model_uncertainty(model, x_test, x_train, y_train)
-    tumc, eumc, aumc = unc.calib_ens_member_uncertainty(model, x_test, x_train, y_train, x_calib, y_calib, calibration_method)
+    tumc, eumc, aumc = unc.calib_ens_member_uncertainty(model, x_test, y_test, x_train, y_train, x_calib, y_calib, calibration_method, seed)
     tuc = unc.calib_ens_total_uncertainty(prob_x_test_calib)
 
     # acc-rej
