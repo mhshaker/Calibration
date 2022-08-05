@@ -29,9 +29,9 @@ Train_new = False
 runs = 10
 ens_size = 10
 calibration_method = "Dir" # "Dir" # temp
-run_name = "Results/Ale NNConv calib_Dir gridCV" # Sample_member_calib
-dataset_list = ['fashionMnist','CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
-# dataset_list = ['CIFAR10'] 
+run_name = "Results/Ale NNConv calib_Dir gridCV Meeting" # Sample_member_calib
+# dataset_list = ['fashionMnist','CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
+dataset_list = ['CIFAR10'] 
 ####################################################### Parameters
 
 parallel_processing = True

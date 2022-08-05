@@ -17,8 +17,8 @@ import CalibrationM as calibm
 # from calmap import plot_calibration_map
 
 calibration_method = "iso" # isotonic "sigmoid"
-dataset_list = ['fashionMnist'] # 'fashionMnist', 'amazon_movie'
-run_name = "Results/Ale RF iso_test"
+dataset_list = ['CIFAR10'] # 'fashionMnist', 'amazon_movie'
+run_name = "Results/Ale RF CIFAR10 meeting"
 log_ECE = False
 log_AUARC = False
 plot_calib = True
@@ -39,9 +39,11 @@ def calib_ale_test(features, target, seed):
     prob_x_calib = model.predict_proba(x_calib)
     
     normal_cw_ece = calibm.classwise_ECE(prob_x_test, y_test)
+    normal_conf_ece = calibm.confidance_ECE(prob_x_test, y_test)
 
-    print(f"seed {seed} normal cw_ece = ", normal_cw_ece)
-    print(f"seed {seed} normal cw_ece sum ", sum(normal_cw_ece))
+    if log_ECE:
+        print(f"seed {seed} normal cw_ece = ", normal_cw_ece)
+        print(f"seed {seed} normal cw_ece sum ", sum(normal_cw_ece))
 
     # train calibrated model
     if calibration_method == "isotonic" or calibration_method == "sigmoid" or all_methods_comp:
@@ -67,8 +69,10 @@ def calib_ale_test(features, target, seed):
             plt.close()
 
             sk_iso_cw_ece = calibm.classwise_ECE(prob_x_test_calib, y_test)
-            print(f"seed {seed} sk_iso cw_ece = ", sk_iso_cw_ece)
-            print(f"seed {seed} sk_iso cw_ece sum ", sum(sk_iso_cw_ece))
+            sk_iso_conf_ece = calibm.confidance_ECE(prob_x_test_calib, y_test)
+            if log_ECE:
+                print(f"seed {seed} sk_iso cw_ece = ", sk_iso_cw_ece)
+                print(f"seed {seed} sk_iso cw_ece sum ", sum(sk_iso_cw_ece))
             
         
     if (calibration_method =="iso" or all_methods_comp) and len(np.unique(y_train)) <= 2:
@@ -95,7 +99,8 @@ def calib_ale_test(features, target, seed):
             # plt.legend()
             # plt.savefig(f"Step_results/iso_plot_test{seed}.png")
             # plt.close()
-            print("iso cw_ece = ", calibm.classwise_ECE(prob_x_test_calib, y_test))
+            if log_ECE:
+                print("iso cw_ece = ", calibm.classwise_ECE(prob_x_test_calib, y_test))
 
 
 
@@ -128,8 +133,10 @@ def calib_ale_test(features, target, seed):
                 plt.close()
 
             dir_cw_ece = calibm.classwise_ECE(prob_x_test_calib, y_test)
-            print(f"seed {seed} dir cw_ece = ", dir_cw_ece)
-            print(f"seed {seed} dir cw_ece sum ", sum(dir_cw_ece))
+            dir_conf_ece = calibm.confidance_ECE(prob_x_test_calib, y_test)
+            if log_ECE:
+                print(f"seed {seed} dir cw_ece = ", dir_cw_ece)
+                print(f"seed {seed} dir cw_ece sum ", sum(dir_cw_ece))
 
     if log_ECE:
         print("ens_loss ", log_loss(y_test, prob_x_test))
@@ -138,8 +145,12 @@ def calib_ale_test(features, target, seed):
 
     # unc Q id
     tu, eu, au = unc.model_uncertainty(model, x_test, x_train, y_train)
-    tumc, eumc, aumc = unc.calib_ens_member_uncertainty(model, x_test, y_test, x_train, y_train, x_calib, y_calib, calibration_method, seed)
+    tumc, eumc, aumc, porb_matrix = unc.calib_ens_member_uncertainty(model, x_test, y_test, x_train, y_train, x_calib, y_calib, calibration_method, seed)
     tuc = unc.calib_ens_total_uncertainty(prob_x_test_calib)
+
+    ctp_cs_ece = calibm.classwise_ECE(np.mean(porb_matrix, axis=1), y_test)
+    ctp_conf_ece = calibm.confidance_ECE(np.mean(porb_matrix, axis=1), y_test)
+
 
     # acc-rej
     # ens
@@ -157,7 +168,7 @@ def calib_ale_test(features, target, seed):
         print(tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc)
     # exit()
 
-    return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc, normal_cw_ece, sk_iso_cw_ece, dir_cw_ece
+    return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc, normal_cw_ece, sk_iso_cw_ece, dir_cw_ece, normal_conf_ece, sk_iso_conf_ece, dir_conf_ece, ctp_cs_ece, ctp_conf_ece
 
 ray.init()
 for dataset in dataset_list:
@@ -176,7 +187,7 @@ for dataset in dataset_list:
     print("------------------------------------")
 
 
-    res_array = res_array_all[:,0:-3].mean(axis=0)
+    res_array = res_array_all[:,0:-8].mean(axis=0)
     print(res_array)
 
     res_txt = f"dataset {dataset}  - calib: {calibration_method}\n"

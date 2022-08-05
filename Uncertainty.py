@@ -1,3 +1,4 @@
+from matplotlib.pyplot import axes
 import numpy as np
 import UncertaintyM as unc
 from sklearn.metrics import log_loss
@@ -33,7 +34,7 @@ def calib_ens_member_uncertainty(model, x_test, y_test, x_train, y_train, X_cali
     else:
         print(f"[Error] No implementation of unc_method {unc_method} for RF")
 
-    return total_uncertainty, epistemic_uncertainty, aleatoric_uncertainty
+    return total_uncertainty, epistemic_uncertainty, aleatoric_uncertainty, porb_matrix
 
 
 ############################################################################################
@@ -78,9 +79,15 @@ def get_member_calib_prob(model_ens, x_test, y_test, X_calib, y_calib, calib_met
     sk_iso_cw_ece = []
     dir_cw_ece = []
 
+    normal_conf_ece = []
+    sk_iso_conf_ece = []
+    dir_conf_ece = []
+
+
     for estimator in model_ens.estimators_:
         if ECE:
             normal_cw_ece.append(calibm.classwise_ECE(estimator.predict_proba(x_test), y_test))
+            normal_conf_ece.append(calibm.confidance_ECE(estimator.predict_proba(x_test), y_test))
 
         if calib_method == "isotonic" or calib_method == "sigmoid" or ECE:
             model_calib = CalibratedClassifierCV(estimator, cv="prefit", method="isotonic") # method=calib_method
@@ -88,7 +95,8 @@ def get_member_calib_prob(model_ens, x_test, y_test, X_calib, y_calib, calib_met
             tree_prob_x_test_calib = model_calib.predict_proba(x_test)
             if ECE:
                 sk_iso_cw_ece.append(calibm.classwise_ECE(tree_prob_x_test_calib, y_test))
-        elif calib_method =="iso":
+                sk_iso_conf_ece.append(calibm.confidance_ECE(tree_prob_x_test_calib, y_test))
+        if calib_method =="iso":
             iso = IsotonicRegression()
             iso.fit(estimator.predict_proba(X_calib)[:,0], y_calib)
             tree_prob_x_test_calib = iso.predict(estimator.predict_proba(x_test)[:,0])
@@ -96,7 +104,7 @@ def get_member_calib_prob(model_ens, x_test, y_test, X_calib, y_calib, calib_met
             second_class_prob = np.ones(len(tree_prob_x_test_calib)) - tree_prob_x_test_calib
             tree_prob_x_test_calib = np.concatenate((tree_prob_x_test_calib.reshape(-1,1), second_class_prob.reshape(-1,1)), axis=1)
 
-        elif calib_method == "Dir" or ECE:
+        if calib_method == "Dir" or ECE:
             # calib_model = FullDirichletCalibrator(reg_lambda=1e-1, reg_mu=None)
             skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=0)
             reg = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
@@ -107,6 +115,7 @@ def get_member_calib_prob(model_ens, x_test, y_test, X_calib, y_calib, calib_met
             tree_prob_x_test_calib = model_calib.predict_proba(estimator.predict_proba(x_test))
             if ECE:
                 dir_cw_ece.append(calibm.classwise_ECE(tree_prob_x_test_calib, y_test))
+                dir_conf_ece.append(calibm.confidance_ECE(tree_prob_x_test_calib, y_test))
 
         prob_matrix.append(tree_prob_x_test_calib)
     if ECE:
@@ -116,12 +125,23 @@ def get_member_calib_prob(model_ens, x_test, y_test, X_calib, y_calib, calib_met
         sk_iso_cw_ece = np.array(sk_iso_cw_ece)
         dir_cw_ece    = np.array(dir_cw_ece)
 
+        normal_conf_ece = np.array(normal_conf_ece)
+        sk_iso_conf_ece = np.array(sk_iso_conf_ece)
+        dir_conf_ece    = np.array(dir_conf_ece)
+
         with open(f"Step_results/mem_run{seed}_normal_cw_ece.npy", 'wb') as f:
             np.save(f, normal_cw_ece)
         with open(f"Step_results/mem_run{seed}_sk_iso_cw_ece.npy", 'wb') as f:
             np.save(f, sk_iso_cw_ece)
         with open(f"Step_results/mem_run{seed}_dir_cw_ece.npy", 'wb') as f:
             np.save(f, dir_cw_ece)
+
+        with open(f"Step_results/mem_run{seed}_normal_conf_ece.npy", 'wb') as f:
+            np.save(f, normal_conf_ece)
+        with open(f"Step_results/mem_run{seed}_sk_iso_conf_ece.npy", 'wb') as f:
+            np.save(f, sk_iso_conf_ece)
+        with open(f"Step_results/mem_run{seed}_dir_conf_ece.npy", 'wb') as f:
+            np.save(f, dir_conf_ece)
 
 
     prob_matrix = np.array(prob_matrix)

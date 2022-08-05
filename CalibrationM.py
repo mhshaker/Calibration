@@ -37,9 +37,9 @@ def classwise_ECE(probs, y_true, bins=10, equal_bin_size=True, full_ece=False):
     else:
         return class_ece 
 
-def confidance_ECE(probs, predictions, y_true, bins=10, equal_bin_size=True):
+def confidance_ECE(probs, y_true, bins=10, equal_bin_size=True):
     prob_max = np.max(probs, axis=1) # find the most probabil class
-    correctness_map = np.where(predictions==y_true, 1, 0) # determine which predictions are correct
+    correctness_map = np.where(np.argmax(probs, axis=1)==y_true, 1, 0) # determine which predictions are correct
     ece = 0
 
     if equal_bin_size == False:
@@ -56,7 +56,7 @@ def confidance_ECE(probs, predictions, y_true, bins=10, equal_bin_size=True):
         prob_max = prob_max[sorted_index]
         correctness_map = correctness_map[sorted_index]
 
-        bin_size = int(len(predictions) / bins)
+        bin_size = int(len(y_true) / bins)
         for bin in range(bins):
             bin_conf = prob_max[bin*bin_size:(bin+1)*bin_size].mean()
             bin_acc = correctness_map[bin*bin_size:(bin+1)*bin_size].sum() / bin_size
