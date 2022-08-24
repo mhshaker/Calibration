@@ -1,0 +1,12 @@
+dataset fashionMnist  - calib: isotonic
+------------------------------------acc-rej
+Ens 
+84.74 Total uncertainty
+75.72 Epist uncertainty
+81.88 Aleat uncertainty
+MemberCalib 
+84.60 Total uncertainty
+74.86 Epist uncertainty
+82.07 Aleat uncertainty
+EnsCalib 
+86.53 Total uncertainty

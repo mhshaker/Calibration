@@ -16,13 +16,13 @@ import CalibrationM as calibm
 
 # from calmap import plot_calibration_map
 
-calibration_method = "iso" # isotonic "sigmoid"
-dataset_list = ['CIFAR10'] # 'fashionMnist', 'amazon_movie'
-run_name = "Results/Ale RF CIFAR10 meeting"
+calibration_method = "isotonic" # isotonic "sigmoid"
+dataset_list = ['fashionMnist'] # 'fashionMnist', 'amazon_movie'
+run_name = "Results/Ale RF laplace_smoothing_off"
 log_ECE = False
 log_AUARC = False
-plot_calib = True
-all_methods_comp = True
+plot_calib = False
+all_methods_comp = False
 
 
 @ray.remote
@@ -89,7 +89,7 @@ def calib_ale_test(features, target, seed):
         if plot_calib:
             linspace = np.linspace(0, 1, len(x_calib))
             pr = iso_calib.predict(linspace)
-            idx = iso_x_calib.argsort()
+            idx = iso_x_calib.argsort() 
             scores = iso_x_calib[idx]
             plt.plot(pr, scores, label='iso')
             # plt.plot([0,1], [0,1], ':', c="black")
@@ -144,7 +144,7 @@ def calib_ale_test(features, target, seed):
 
 
     # unc Q id
-    tu, eu, au = unc.model_uncertainty(model, x_test, x_train, y_train)
+    tu, eu, au = unc.model_uncertainty(model, x_test, x_train, y_train, laplace_smoothing=0) # have to turn off laplace_smoothing because member calibrated uncertainty does not use laplace_smoothing
     tumc, eumc, aumc, porb_matrix = unc.calib_ens_member_uncertainty(model, x_test, y_test, x_train, y_train, x_calib, y_calib, calibration_method, seed)
     tuc = unc.calib_ens_total_uncertainty(prob_x_test_calib)
 
@@ -167,6 +167,8 @@ def calib_ale_test(features, target, seed):
     if log_AUARC:
         print(tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc)
     # exit()
+    if log_ECE == False:
+        normal_cw_ece, sk_iso_cw_ece, dir_cw_ece, normal_conf_ece, sk_iso_conf_ece, dir_conf_ece, ctp_cs_ece, ctp_conf_ece = 0,0,0,0,0,0,0,0
 
     return tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc, normal_cw_ece, sk_iso_cw_ece, dir_cw_ece, normal_conf_ece, sk_iso_conf_ece, dir_conf_ece, ctp_cs_ece, ctp_conf_ece
 

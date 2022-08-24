@@ -72,8 +72,8 @@ def get_prob(model_ens, x_data, laplace_smoothing, a=0, b=0, log=False):
     prob_matrix = prob_matrix.transpose([1,0,2]) # D1 = data index D2= ens tree index D3= prediction prob for classes
     return prob_matrix
 
-def get_member_calib_prob(model_ens, x_test, y_test, X_calib, y_calib, calib_method, seed, ECE=True):
-    prob_matrix  = []
+def get_member_calib_prob(model_ens, x_test, y_test, X_calib, y_calib, calib_method, seed, ECE=False): # ECE is the log that will take a long time
+    prob_matrix  = [] 
 
     normal_cw_ece = []
     sk_iso_cw_ece = []
