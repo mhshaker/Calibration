@@ -182,7 +182,7 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     # print("ACC enscalib     ", accuracy_score(y_test, ens_x_test_predict_enscalib))
 
     # unc Q
-    tu, eu, au = uncM.uncertainty_ent_bays(ens_x_test_prob, np.ones(ens_size))
+    tu, eu, au = uncM.uncertainty_ent_bays(ens_x_test_prob, np.ones(ens_size)) # np.ones is wrong -> np.full 1 / ens_size
     tumc, eumc, aumc = uncM.uncertainty_ent_bays(ens_x_test_prob_calib, np.ones(ens_size))
 
     tu = unc.calib_ens_total_uncertainty(ens_x_test_prob_avg)
