@@ -29,9 +29,9 @@ Train_new = False
 runs = 10
 ens_size = 10
 calibration_method = "Dir" # "Dir" # temp
-run_name = "Results/Ale NNConv calib_Dir gridCV Meeting" # Sample_member_calib
-# dataset_list = ['fashionMnist','CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
-dataset_list = ['CIFAR10'] 
+run_name = "Results/Ale NN uncFix" # Sample_member_calib
+dataset_list = ['fashionMnist','CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
+# dataset_list = ['CIFAR10'] 
 ####################################################### Parameters
 
 parallel_processing = True
@@ -182,8 +182,8 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     # print("ACC enscalib     ", accuracy_score(y_test, ens_x_test_predict_enscalib))
 
     # unc Q
-    tu, eu, au = uncM.uncertainty_ent_bays(ens_x_test_prob, np.ones(ens_size)) # np.ones is wrong -> np.full 1 / ens_size
-    tumc, eumc, aumc = uncM.uncertainty_ent_bays(ens_x_test_prob_calib, np.ones(ens_size))
+    tu, eu, au = uncM.uncertainty_ent_bays(ens_x_test_prob, np.full(ens_size, 1/ens_size)) # np.ones is wrong -> np.full 1 / ens_size
+    tumc, eumc, aumc = uncM.uncertainty_ent_bays(ens_x_test_prob_calib, np.full(ens_size, 1/ens_size))
 
     tu = unc.calib_ens_total_uncertainty(ens_x_test_prob_avg)
     tuc = unc.calib_ens_total_uncertainty(ens_x_test_prob_avg_enscalib)
