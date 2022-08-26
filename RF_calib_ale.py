@@ -16,14 +16,15 @@ import CalibrationM as calibm
 
 # from calmap import plot_calibration_map
 
-calibration_method = "isotonic" # isotonic "sigmoid"
-dataset_list = ['fashionMnist'] # 'fashionMnist', 'amazon_movie'
-run_name = "Results/Ale RF laplace_smoothing_off"
+calibration_method = "Dir" # isotonic "sigmoid"
+dataset_list = ['fashionMnist', "CIFAR10", "CIFAR100"] # 'fashionMnist', 'amazon_movie'
+run_name = "Results/Ale RF uncFix"
 log_ECE = False
 log_AUARC = False
+log_prob_dist = False
 plot_calib = False
 all_methods_comp = False
-
+laplace = 0
 
 @ray.remote
 def calib_ale_test(features, target, seed):
@@ -36,6 +37,9 @@ def calib_ale_test(features, target, seed):
     model.fit(x_train, y_train)
     predictions_x_test = model.predict(x_test)
     prob_x_test = model.predict_proba(x_test)
+    if log_prob_dist:
+        plt.hist(prob_x_test)
+        plt.savefig("Step_results/ens_normal_dist_l1.png")
     prob_x_calib = model.predict_proba(x_calib)
     
     normal_cw_ece = calibm.classwise_ECE(prob_x_test, y_test)
@@ -142,12 +146,15 @@ def calib_ale_test(features, target, seed):
         print("ens_loss ", log_loss(y_test, prob_x_test))
         print("enscalib_loss ", log_loss(y_test, prob_x_test_calib))
 
+    if log_prob_dist:
+        plt.hist(prob_x_test_calib)
+        plt.savefig("Step_results/ens_calib_dist_l1.png")
+        exit()
 
     # unc Q id
-    tu, eu, au = unc.model_uncertainty(model, x_test, x_train, y_train, laplace_smoothing=0) # have to turn off laplace_smoothing because member calibrated uncertainty does not use laplace_smoothing
-    tumc, eumc, aumc, porb_matrix = unc.calib_ens_member_uncertainty(model, x_test, y_test, x_train, y_train, x_calib, y_calib, calibration_method, seed)
+    tu, eu, au = unc.model_uncertainty(model, x_test, x_train, y_train, laplace_smoothing=laplace) # have to turn off laplace_smoothing because member calibrated uncertainty does not use laplace_smoothing
+    tumc, eumc, aumc, porb_matrix = unc.calib_ens_member_uncertainty(model, x_test, y_test, x_train, y_train, x_calib, y_calib, calibration_method, seed, laplace_smoothing=laplace)
     tuc = unc.calib_ens_total_uncertainty(prob_x_test_calib)
-
     ctp_cs_ece = calibm.classwise_ECE(np.mean(porb_matrix, axis=1), y_test)
     ctp_conf_ece = calibm.confidance_ECE(np.mean(porb_matrix, axis=1), y_test)
 
