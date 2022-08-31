@@ -1,0 +1,12 @@
+dataset CIFAR100  - calib: Dir
+------------------------------------acc-rej
+Ens 
+74.75 Total uncertainty
+35.16 Epist uncertainty
+72.27 Aleat uncertainty
+MemberCalib 
+73.90 Total uncertainty
+35.83 Epist uncertainty
+72.10 Aleat uncertainty
+EnsCalib 
+69.11 Total uncertainty

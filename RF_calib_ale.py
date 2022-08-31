@@ -16,17 +16,17 @@ import CalibrationM as calibm
 
 # from calmap import plot_calibration_map
 
-calibration_method = "Dir" # isotonic "sigmoid"
-dataset_list = ['fashionMnist', "CIFAR10", "CIFAR100"] # 'fashionMnist', 'amazon_movie'
-run_name = "Results/Ale RF uncFix"
+calibration_method = "isotonic" # isotonic "sigmoid"
+dataset_list = ['CIFAR100'] # , "CIFAR10", "CIFAR100" 'fashionMnist', 'amazon_movie'
+run_name = "Results/Ale RF dist plot"
 log_ECE = False
 log_AUARC = False
-log_prob_dist = False
+log_prob_dist = True
 plot_calib = False
 all_methods_comp = False
 laplace = 0
 
-@ray.remote
+# @ray.remote
 def calib_ale_test(features, target, seed):
     # seperate to train test calibration
     x_train, x_test_all, y_train, y_test_all = train_test_split(features, target, test_size=0.4, shuffle=True, random_state=seed)
@@ -38,8 +38,9 @@ def calib_ale_test(features, target, seed):
     predictions_x_test = model.predict(x_test)
     prob_x_test = model.predict_proba(x_test)
     if log_prob_dist:
-        plt.hist(prob_x_test)
-        plt.savefig("Step_results/ens_normal_dist_l1.png")
+        plt.hist(prob_x_test[:,3], bins=100, cumulative=False)
+        plt.savefig("Step_results/ens_normal_dist_l1_class0.png")
+        plt.close()
     prob_x_calib = model.predict_proba(x_calib)
     
     normal_cw_ece = calibm.classwise_ECE(prob_x_test, y_test)
@@ -147,8 +148,9 @@ def calib_ale_test(features, target, seed):
         print("enscalib_loss ", log_loss(y_test, prob_x_test_calib))
 
     if log_prob_dist:
-        plt.hist(prob_x_test_calib)
-        plt.savefig("Step_results/ens_calib_dist_l1.png")
+        plt.hist(prob_x_test_calib[:,3], bins=100, cumulative=False)
+        plt.savefig("Step_results/ens_calib_dist_l1_class0.png")
+        plt.close()
         exit()
 
     # unc Q id
@@ -186,8 +188,8 @@ for dataset in dataset_list:
 
     ray_array = []
     for seed in range(10):
-        ray_array.append(calib_ale_test.remote(features, target, seed))
-        # ray_array.append(calib_ale_test(features, target, seed))
+        # ray_array.append(calib_ale_test.remote(features, target, seed))
+        ray_array.append(calib_ale_test(features, target, seed))
 
     res_array_all = np.array(ray.get(ray_array))
     with open('Step_results/res_array_all.npy', 'wb') as f:

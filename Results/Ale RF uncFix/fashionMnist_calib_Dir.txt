@@ -1,4 +1,4 @@
-dataset fashionMnist  - calib: Dir
+dataset fashionMnist  - calib: Dir L0
 ------------------------------------acc-rej
 Ens 
 84.74 Total uncertainty

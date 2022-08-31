@@ -1,0 +1,12 @@
+dataset CIFAR100  - calib: isotonic
+------------------------------------acc-rej
+Ens 
+68.31 Total uncertainty
+52.39 Epist uncertainty
+65.73 Aleat uncertainty
+MemberCalib 
+75.76 Total uncertainty
+35.52 Epist uncertainty
+73.59 Aleat uncertainty
+EnsCalib 
+75.86 Total uncertainty
