@@ -26,12 +26,12 @@ tf.keras.utils.disable_interactive_logging()
 log_ECE = False
 log_AUARC = False
 Train_new = False
-runs = 10
+runs = 1
 ens_size = 10
 calibration_method = "Dir" # "Dir" # temp
-run_name = "Results/Ale NN uncFix" # Sample_member_calib
-dataset_list = ['fashionMnist','CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
-# dataset_list = ['CIFAR10'] 
+run_name = "Results/Ale NN uncFix predFix 7.9.22" # Sample_member_calib
+# dataset_list = ['fashionMnist','CIFAR100', 'CIFAR10'] # 'fashionMnist', 'amazon_movie'
+dataset_list = ['CIFAR100'] 
 ####################################################### Parameters
 
 parallel_processing = True
@@ -46,6 +46,8 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     elif dataname == "fashionMnist":
         features = np.reshape(features, (-1,28,28,1))
         input_shape = (28,28,1)
+    elif dataname == "sim":
+        pass
 
     print("------------------------------------ ", seed)
     model_path_seed = model_path + "_run" + str(seed)
@@ -92,7 +94,6 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
             print("loading model path: ", model_path)
             model = tf.keras.models.load_model(model_path)
             ensemble.append(model)
-
 
     ens_x_test_prob = []
     ens_x_test_prob_calib = []
@@ -195,11 +196,11 @@ def calib_ale_test(ens_size, dataname, features, target, model_path, seed):
     eu_auroc = uncM.unc_auroc(ens_x_test_predict, y_test, eu)
     au_auroc = uncM.unc_auroc(ens_x_test_predict, y_test, au)
     # ens member calib
-    tumc_auroc = uncM.unc_auroc(ens_x_test_predict_memcalib, y_test, tumc) # ens_x_test_predict_memcalib might change after calibration
-    eumc_auroc = uncM.unc_auroc(ens_x_test_predict_memcalib, y_test, eumc)
-    aumc_auroc = uncM.unc_auroc(ens_x_test_predict_memcalib, y_test, aumc)
+    tumc_auroc = uncM.unc_auroc(ens_x_test_predict, y_test, tumc) # ens_x_test_predict might change after calibration
+    eumc_auroc = uncM.unc_auroc(ens_x_test_predict, y_test, eumc)
+    aumc_auroc = uncM.unc_auroc(ens_x_test_predict, y_test, aumc)
     # ens calib
-    tuc_auroc = uncM.unc_auroc(ens_x_test_predict_enscalib, y_test, tuc)
+    tuc_auroc = uncM.unc_auroc(ens_x_test_predict, y_test, tuc)
 
     if log_AUARC:
         print(tu_auroc, eu_auroc, au_auroc, tumc_auroc, eumc_auroc, aumc_auroc, tuc_auroc)
